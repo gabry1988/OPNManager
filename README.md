@@ -49,3 +49,30 @@ This application uses API access to interact with your OPNsense firewall. Ensure
 
 Your feedback and contributions are welcome! Please open an issue or submit a pull request on our GitHub repository.
 
+
+
+---
+
+## Screenshot Gallery  
+
+Below are screenshots showcasing OPNManager's interface and features:  
+
+<div align="center">  
+  <img src="./screenshots/phone/Screenshot_20250309_181351.png" alt="Screenshot 1" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250309_194754.png" alt="Screenshot 2" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250309_200250.png" alt="Screenshot 3" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250309_200308.png" alt="Screenshot 4" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250309_200320.png" alt="Screenshot 5" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250309_200331.png" alt="Screenshot 6" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250309_200348.png" alt="Screenshot 7" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250309_200359.png" alt="Screenshot 8" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250309_200413.png" alt="Screenshot 9" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250311_210558.png" alt="Screenshot 10" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250311_210622.png" alt="Screenshot 11" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250311_210716.png" alt="Screenshot 12" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250311_210739.png" alt="Screenshot 13" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250311_210757.png" alt="Screenshot 14" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250311_210815.png" alt="Screenshot 15" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250311_210834.png" alt="Screenshot 16" width="250px">  
+  <img src="./screenshots/phone/Screenshot_20250311_211233.png" alt="Screenshot 17" width="250px">  
+</div>  
