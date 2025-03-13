@@ -96,8 +96,17 @@ pub async fn check_for_updates(database: State<'_, Database>) -> Result<Value, S
         .await
         .map_err(|e| format!("Failed to parse firmware info: {}", e))?;
 
-    let mut result = firmware_status;
+    let mut result = firmware_status.clone();
+    
     result["latest_version"] = firmware_info["product"]["product_latest"].clone();
+
+    if firmware_status["upgrade_major_version"].is_string() {
+        result["has_major_upgrade"] = serde_json::json!(true);
+        result["major_upgrade_version"] = firmware_status["upgrade_major_version"].clone();
+        result["major_upgrade_message"] = firmware_status["upgrade_major_message"].clone();
+    } else {
+        result["has_major_upgrade"] = serde_json::json!(false);
+    }
 
     Ok(result)
 }
@@ -244,5 +253,16 @@ pub async fn get_current_firmware_status(database: State<'_, Database>) -> Resul
         .await
         .map_err(|e| format!("Failed to parse firmware status: {}", e))?;
 
-    Ok(firmware_status)
+    let has_major_upgrade = firmware_status["upgrade_major_version"].is_string();
+    
+    let mut result = firmware_status.clone();
+    if has_major_upgrade {
+        result["has_major_upgrade"] = serde_json::json!(true);
+        result["major_upgrade_version"] = firmware_status["upgrade_major_version"].clone();
+        result["major_upgrade_message"] = firmware_status["upgrade_major_message"].clone();
+    } else {
+        result["has_major_upgrade"] = serde_json::json!(false);
+    }
+
+    Ok(result)
 }

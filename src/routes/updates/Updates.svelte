@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { invoke } from "@tauri-apps/api/core";
   import { toasts } from '$lib/stores/toastStore';
-  import { mdiRefresh, mdiPackageVariant, mdiCog } from '@mdi/js';
+  import { mdiRefresh, mdiPackageVariant, mdiCog, mdiAlertCircle, mdiChevronDown, mdiChevronUp } from '@mdi/js';
 
   let firmwareStatus: any = null;
   let isChecking = false;
@@ -11,6 +11,11 @@
   let showUpgradeButton = false;
   let changelog = '';
   let showChangelog = false;
+  let hasMajorUpgrade = false;
+  let majorUpgradeVersion = '';
+  let majorUpgradeMessage = '';
+  let changelogVersion = '';
+  let isMajorMessageCollapsed = true;
 
   onMount(async () => {
     await getFirmwareStatus();
@@ -20,10 +25,21 @@
     try {
       firmwareStatus = await invoke<any>('get_current_firmware_status');
       console.log('Current firmware status:', firmwareStatus);
+      
+      // Reset major upgrade status on initial load - we'll only show it after explicit check
+      hasMajorUpgrade = false;
+      majorUpgradeVersion = '';
+      majorUpgradeMessage = '';
     } catch (error) {
       console.error('Failed to get current firmware status:', error);
       toasts.error('Failed to get current firmware status. Please try again.');
     }
+  }
+
+  function decodeHtmlEntities(html) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = html;
+    return textarea.value;
   }
 
   async function checkForUpdates() {
@@ -33,13 +49,66 @@
     try {
       const result = await invoke<any>('check_for_updates');
       console.log('Check for updates result:', result);
-      if (result.status === "update") {
+
+      if (result.has_major_upgrade && result.major_upgrade_version) {
+        hasMajorUpgrade = true;
+        majorUpgradeVersion = result.major_upgrade_version;
+        majorUpgradeMessage = decodeHtmlEntities(result.major_upgrade_message || '');
+        changelogVersion = majorUpgradeVersion;
         showChangelogButton = true;
         showUpgradeButton = true;
-        toasts.success('Updates are available.');
+        toasts.success(`Major update to version ${majorUpgradeVersion} is available.`);
+      } else if (result.status === "update") {
+
+        const currentVersion = result.product_version || 
+                              (result.product?.product_version) || 
+                              "unknown";
+        
+        console.log("Current installed version:", currentVersion);
+
+        let updateVersion = null;
+
+        if (result.target_version) {
+          updateVersion = result.target_version;
+          console.log("Found target_version:", updateVersion);
+        } else if (result.product?.product_latest) {
+          updateVersion = result.product.product_latest;
+          console.log("Found product.product_latest:", updateVersion);
+        }
+
+        if (updateVersion && currentVersion) {
+          const cleanCurrentVersion = currentVersion.split('_')[0];
+          const cleanUpdateVersion = updateVersion.split('_')[0];
+          
+          console.log(`Comparing versions: current=${cleanCurrentVersion}, update=${cleanUpdateVersion}`);
+          
+          if (cleanCurrentVersion !== cleanUpdateVersion) {
+            changelogVersion = updateVersion;
+            showChangelogButton = true;
+            showUpgradeButton = true;
+            console.log(`Update available: ${cleanCurrentVersion} → ${cleanUpdateVersion}`);
+            toasts.success(`Update to version ${cleanUpdateVersion} is available.`);
+          } else {
+            console.log(`No update needed: current version ${cleanCurrentVersion} matches available version`);
+            toasts.success('Your system is already on the latest version.');
+          }
+        } else {
+          console.warn('Cannot determine current or update version', { 
+            currentVersion, 
+            updateVersion, 
+            result 
+          });
+
+          if (result.status === "update") {
+            toasts.warning('Updates may be available, but version information is unclear.');
+          } else {
+            toasts.success('Your system appears to be up to date.');
+          }
+        }
       } else {
         toasts.success('Your system is up to date.');
       }
+      
       firmwareStatus = result;
     } catch (error) {
       console.error('Failed to check for updates:', error);
@@ -50,14 +119,40 @@
   }
 
   async function getChangelog() {
-    if (firmwareStatus?.latest_version) {
-      try {
-        changelog = await invoke<string>('get_changelog', { version: firmwareStatus.latest_version });
-        showChangelog = true;
-      } catch (error) {
-        console.error('Failed to get changelog:', error);
-        toasts.error('Failed to get changelog. Please try again.');
+
+    let version = firmwareStatus?.target_version;
+
+    if (!version) {
+      if (hasMajorUpgrade && majorUpgradeVersion) {
+        version = majorUpgradeVersion;
+      } else if (changelogVersion) {
+        version = changelogVersion;
+      } else if (firmwareStatus?.product?.product_latest) {
+        version = firmwareStatus.product.product_latest;
       }
+    }
+    
+    if (!version) {
+      console.error('No version available for changelog');
+      toasts.error('Could not determine version for changelog. Please try checking for updates again.');
+      return;
+    }
+    
+    console.log('Getting changelog for version:', version);
+    
+    try {
+      changelog = await invoke<string>('get_changelog', { version });
+      if (!changelog) {
+        console.error('Empty changelog returned');
+        toasts.error('No changelog available for this version.');
+        return;
+      }
+
+      changelogVersion = version;
+      showChangelog = true;
+    } catch (error) {
+      console.error('Failed to get changelog:', error);
+      toasts.error(`Failed to get changelog: ${error}`);
     }
   }
 
@@ -69,6 +164,7 @@
       toasts.success(result);
       showChangelogButton = false;
       showUpgradeButton = false;
+      hasMajorUpgrade = false;
       await getFirmwareStatus();
     } catch (error) {
       console.error('Failed to start update:', error);
@@ -81,6 +177,34 @@
 
 <div class="p-4 max-w-3xl mx-auto">
   <h2 class="text-2xl font-bold mb-4">Firmware Status</h2>
+
+  {#if hasMajorUpgrade && majorUpgradeVersion && majorUpgradeMessage}
+    <div class="mb-6 alert alert-warning">
+      <div class="flex items-start w-full">
+        <svg class="w-6 h-6 mr-2 flex-shrink-0" viewBox="0 0 24 24">
+          <path fill="currentColor" d={mdiAlertCircle} />
+        </svg>
+        <div class="flex-1">
+          <div class="flex justify-between items-center mb-1">
+            <h3 class="font-bold">Major Update Available: {majorUpgradeVersion}</h3>
+            <button 
+              class="btn btn-sm btn-ghost" 
+              on:click={() => isMajorMessageCollapsed = !isMajorMessageCollapsed}
+            >
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="currentColor" d={isMajorMessageCollapsed ? mdiChevronDown : mdiChevronUp} />
+              </svg>
+            </button>
+          </div>
+          {#if !isMajorMessageCollapsed}
+            <div class="prose prose-sm max-w-none">
+              {@html majorUpgradeMessage}
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if firmwareStatus}
     <div class="card bg-base-100 shadow-xl mb-6 overflow-x-auto">
@@ -115,6 +239,12 @@
               <td class="font-semibold whitespace-nowrap">Checked on</td>
               <td class="break-all">{firmwareStatus.last_check ?? 'N/A'}</td>
             </tr>
+            {#if hasMajorUpgrade && majorUpgradeVersion}
+              <tr class="bg-warning bg-opacity-20">
+                <td class="font-semibold whitespace-nowrap">Available Upgrade</td>
+                <td class="break-all font-bold">{majorUpgradeVersion}</td>
+              </tr>
+            {/if}
           </tbody>
         </table>
       </div>
@@ -157,7 +287,9 @@
             <path fill="currentColor" d={mdiCog} />
           </svg>
         {/if}
-        Upgrade
+        Upgrade to {changelogVersion || firmwareStatus?.target_version || 
+          (hasMajorUpgrade ? majorUpgradeVersion : 
+          (firmwareStatus?.product?.product_latest || 'latest version'))}
       </button>
     {/if}
   </div>
@@ -173,7 +305,7 @@
   {#if showChangelog}
     <div class="modal modal-open">
       <div class="modal-box max-w-3xl w-full">
-        <h3 class="font-bold text-lg mb-4">Changelog</h3>
+        <h3 class="font-bold text-lg mb-4">Changelog for {changelogVersion}</h3>
         <div class="py-4 max-h-96 overflow-y-auto">
           {@html changelog}
         </div>
