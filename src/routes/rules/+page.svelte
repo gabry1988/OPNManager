@@ -196,7 +196,85 @@
     {:else if error}
       <p class="text-error">Error: {error}</p>
     {:else if rules.length === 0}
-      <p class="text-base-content">No firewall rules found.</p>
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h3 class="card-title text-lg">No Automation Rules Found</h3>
+          <div class="divider my-2"></div>
+
+          <div class="space-y-4">
+            <p>
+              Your rules list is empty because OPNsense only exposes <strong
+                >Automation Rules</strong
+              > through its API, not the regular interface firewall rules.
+            </p>
+
+            <div class="alert alert-info shadow-lg">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                class="stroke-current shrink-0 w-6 h-6"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+              </svg>
+              <div>
+                <span class="font-medium"
+                  >This is not an error with the application.</span
+                > This is a limitation of the OPNsense API.
+              </div>
+            </div>
+
+            <h4 class="font-medium text-md">What you need to know:</h4>
+            <ul class="list-disc pl-5 space-y-2">
+              <li>
+                OPNsense has two separate rule systems:
+                <ul class="list-circle pl-5 mt-1">
+                  <li>
+                    <strong>Interface Rules</strong> - Created through the UI but
+                    not accessible via API
+                  </li>
+                  <li>
+                    <strong>Automation Rules</strong> - Created specifically for
+                    API access and automation
+                  </li>
+                </ul>
+              </li>
+              <li>
+                Rules created in the OPNsense web interface are not shown here
+              </li>
+              <li>
+                Rules created through this app will appear in the "Automation"
+                section of your OPNsense firewall
+              </li>
+            </ul>
+
+            <div class="bg-base-200 p-4 rounded-lg">
+              <h4 class="font-medium">To create your first automation rule:</h4>
+              <ol class="list-decimal pl-5 mt-2 space-y-1">
+                <li>Click the "Add Rule" button above</li>
+                <li>Configure your rule settings</li>
+                <li>Save the rule to see it appear in this list</li>
+              </ol>
+            </div>
+
+            <p>
+              <a
+                href="https://docs.opnsense.org/development/api/core/firewall.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="link link-primary"
+              >
+                Learn more about OPNsense Firewall API limitations
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
     {:else}
       <div class="space-y-4">
         {#each rules as rule (rule.uuid)}

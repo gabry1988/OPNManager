@@ -80,9 +80,9 @@
   let pollInterval: number;
   let progressInterval: number;
   let progress = 0;
-  const UPDATE_INTERVAL = 5000; // 5 seconds
+  const UPDATE_INTERVAL = 5000; 
 
-  // Reactive variables for memory and disk usage
+
   $: memoryUsagePercent = dashboardData.systemResources
     ? Math.round(
         (dashboardData.systemResources.memory.used /
