@@ -4,7 +4,9 @@ use log::error;
 use reqwest::header::{HeaderMap, ACCEPT};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::State;
+use tauri::{Emitter, Manager, State, Window};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FirewallLog {
@@ -56,6 +58,44 @@ pub struct LogFilters {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InterfaceNames(pub HashMap<String, String>);
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LogFilterCriteria {
+    action: String,
+    interface: String,
+    direction: String,
+    limit: usize,
+}
+
+pub struct LogCache {
+    logs: Vec<FirewallLog>,
+    last_digest: String,
+    last_update: Instant,
+    active_listeners: usize,
+    filter_criteria: LogFilterCriteria,
+}
+
+impl LogCache {
+    pub fn new() -> Self {
+        Self {
+            logs: Vec::with_capacity(1000),
+            last_digest: String::new(),
+            last_update: Instant::now(),
+            active_listeners: 0,
+            filter_criteria: LogFilterCriteria {
+                action: String::new(),
+                interface: String::new(),
+                direction: String::new(),
+                limit: 1000,
+            },
+        }
+    }
+}
+
+pub fn register_log_cache(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    app.manage(Arc::new(Mutex::new(LogCache::new())));
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn get_log_filters(database: State<'_, Database>) -> Result<LogFilters, String> {
@@ -121,16 +161,15 @@ pub async fn get_interface_names(database: State<'_, Database>) -> Result<Interf
         .map_err(|e| format!("Failed to parse interface names: {}", e))
 }
 
-#[tauri::command]
-pub async fn get_firewall_logs(database: State<'_, Database>) -> Result<Vec<FirewallLog>, String> {
+async fn fetch_firewall_logs(database: State<'_, Database>, digest: &str) -> Result<Vec<FirewallLog>, String> {
     let api_info = database
         .get_default_api_info()
         .map_err(|e| format!("Failed to get API info: {}", e))?
         .ok_or_else(|| "API info not found".to_string())?;
 
     let url = format!(
-        "{}:{}/api/diagnostics/firewall/log",
-        api_info.api_url, api_info.port
+        "{}:{}/api/diagnostics/firewall/log/?digest={}&limit=1000",
+        api_info.api_url, api_info.port, digest
     );
 
     let mut headers = HeaderMap::new();
@@ -170,22 +209,178 @@ pub async fn get_firewall_logs(database: State<'_, Database>) -> Result<Vec<Fire
 }
 
 #[tauri::command]
-pub fn apply_filters(
-    logs: Vec<FirewallLog>,
-    action: String,
-    interface: String,
-    direction: String,
-) -> Vec<FirewallLog> {
-    logs.into_iter()
-        .filter(|log| {
-            (action.is_empty() || log.action == Some(action.clone()))
-                && (interface.is_empty() || log.interface == Some(interface.clone()))
-                && (direction.is_empty() || log.dir == Some(direction.clone()))
-        })
-        .collect()
+pub async fn get_firewall_logs(
+    database: State<'_, Database>,
+    log_cache: State<'_, Arc<Mutex<LogCache>>>,
+) -> Result<Vec<FirewallLog>, String> {
+    let digest;
+    {
+        let cache = log_cache.lock().unwrap();
+        digest = cache.last_digest.clone();
+    }
+    let new_logs = fetch_firewall_logs(database, &digest).await?;
+    
+    let mut cache = log_cache.lock().unwrap();
+
+    if !new_logs.is_empty() {
+        for log in &new_logs {
+            cache.logs.push(log.clone());
+        }
+        cache.logs.sort_by(|a, b| {
+            let date_a = a.timestamp.as_ref().map_or(0, |ts| {
+                chrono::DateTime::parse_from_rfc3339(ts)
+                    .map(|dt| dt.timestamp())
+                    .unwrap_or(0)
+            });
+            let date_b = b.timestamp.as_ref().map_or(0, |ts| {
+                chrono::DateTime::parse_from_rfc3339(ts)
+                    .map(|dt| dt.timestamp())
+                    .unwrap_or(0)
+            });
+            date_b.cmp(&date_a)
+        });
+        if let Some(log) = new_logs.first() {
+            if let Some(digest) = &log.digest {
+                cache.last_digest = digest.clone();
+            }
+        }
+        if cache.logs.len() > cache.filter_criteria.limit * 2 {
+            cache.logs = cache.logs.iter()
+                .take(cache.filter_criteria.limit * 2)
+                .cloned()
+                .collect();
+        }
+        
+        cache.last_update = Instant::now();
+    }
+    let filtered_logs = cache.logs.iter().filter(|log| {
+        (cache.filter_criteria.action.is_empty() 
+         || log.action.as_ref().map_or(false, |a| a == &cache.filter_criteria.action))
+        && (cache.filter_criteria.interface.is_empty() 
+           || log.interface.as_ref().map_or(false, |i| i == &cache.filter_criteria.interface))
+        && (cache.filter_criteria.direction.is_empty() 
+           || log.dir.as_ref().map_or(false, |d| d == &cache.filter_criteria.direction))
+    }).cloned().collect::<Vec<_>>();
+
+    Ok(filtered_logs.into_iter()
+       .take(cache.filter_criteria.limit)
+       .collect())
 }
 
 #[tauri::command]
-pub fn limit_logs(logs: Vec<FirewallLog>, limit: usize) -> Vec<FirewallLog> {
-    logs.into_iter().take(limit).collect()
+pub fn update_log_filters(
+    log_cache: State<'_, Arc<Mutex<LogCache>>>,
+    action: String,
+    interface: String,
+    direction: String,
+    limit: Option<usize>,
+) -> Result<(), String> {
+    let mut cache = log_cache.lock().unwrap();
+    
+    cache.filter_criteria = LogFilterCriteria {
+        action,
+        interface,
+        direction,
+        limit: limit.unwrap_or(1000),
+    };
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn start_log_polling(window: Window, log_cache: State<'_, Arc<Mutex<LogCache>>>) -> Result<(), String> {
+    {
+        let mut cache = log_cache.lock().unwrap();
+        cache.active_listeners += 1;
+    }
+    
+    let log_cache_clone = log_cache.inner().clone();
+    let window_clone = window.clone();
+
+    tauri::async_runtime::spawn(async move {
+        let database = window_clone.state::<Database>();
+        
+        loop {
+            let digest;
+            {
+                let cache = log_cache_clone.lock().unwrap();
+                if cache.active_listeners == 0 {
+                    break;
+                }
+                digest = cache.last_digest.clone();
+            }
+            match fetch_firewall_logs(database.clone(), &digest).await {
+                Ok(new_logs) => {
+                    if !new_logs.is_empty() {
+                        let mut cache = log_cache_clone.lock().unwrap();
+
+                        for log in &new_logs {
+                            cache.logs.push(log.clone());
+                        }
+
+                        if let Some(log) = new_logs.first() {
+                            if let Some(digest) = &log.digest {
+                                cache.last_digest = digest.clone();
+                            }
+                        }
+                        cache.logs.sort_by(|a, b| {
+                            let date_a = a.timestamp.as_ref().map_or(0, |ts| {
+                                chrono::DateTime::parse_from_rfc3339(ts)
+                                    .map(|dt| dt.timestamp())
+                                    .unwrap_or(0)
+                            });
+                            let date_b = b.timestamp.as_ref().map_or(0, |ts| {
+                                chrono::DateTime::parse_from_rfc3339(ts)
+                                    .map(|dt| dt.timestamp())
+                                    .unwrap_or(0)
+                            });
+                            date_b.cmp(&date_a)
+                        });
+
+                        if cache.logs.len() > cache.filter_criteria.limit * 2 {
+                            cache.logs = cache.logs.iter()
+                                .take(cache.filter_criteria.limit * 2)
+                                .cloned()
+                                .collect();
+                        }
+
+                        let filtered_logs = cache.logs.iter().filter(|log| {
+                            (cache.filter_criteria.action.is_empty() 
+                             || log.action.as_ref().map_or(false, |a| a == &cache.filter_criteria.action))
+                            && (cache.filter_criteria.interface.is_empty() 
+                               || log.interface.as_ref().map_or(false, |i| i == &cache.filter_criteria.interface))
+                            && (cache.filter_criteria.direction.is_empty() 
+                               || log.dir.as_ref().map_or(false, |d| d == &cache.filter_criteria.direction))
+                        }).cloned().take(cache.filter_criteria.limit).collect::<Vec<_>>();
+
+                        let _ = window_clone.emit("firewall-logs-updated", filtered_logs);
+                    }
+                },
+                Err(e) => {
+                    error!("Failed to fetch firewall logs: {}", e);
+                }
+            }
+
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    });
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_log_polling(log_cache: State<'_, Arc<Mutex<LogCache>>>) -> Result<(), String> {
+    let mut cache = log_cache.lock().unwrap();
+    if cache.active_listeners > 0 {
+        cache.active_listeners -= 1;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn clear_log_cache(log_cache: State<'_, Arc<Mutex<LogCache>>>) -> Result<(), String> {
+    let mut cache = log_cache.lock().unwrap();
+    cache.logs.clear();
+    cache.last_digest = String::new(); 
+    Ok(())
 }

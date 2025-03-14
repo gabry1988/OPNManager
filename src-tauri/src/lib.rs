@@ -16,6 +16,7 @@ mod update_checker;
 use db::Database;
 use pin_cache::PinCache;
 use tauri::Manager;
+use firewall_logs::register_log_cache; 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,6 +29,8 @@ pub fn run() {
 
             let db = Database::new(app.handle()).expect("Failed to initialize database");
             app.manage(db);
+            
+            register_log_cache(app).expect("Failed to register log cache");
 
             Ok(())
         })
@@ -71,8 +74,10 @@ pub fn run() {
             firewall_logs::get_log_filters,
             firewall_logs::get_interface_names,
             firewall_logs::get_firewall_logs,
-            firewall_logs::apply_filters,
-            firewall_logs::limit_logs,
+            firewall_logs::update_log_filters,
+            firewall_logs::start_log_polling,
+            firewall_logs::stop_log_polling,
+            firewall_logs::clear_log_cache,
             routes::get_routes,
             routes::get_route_info,
             routes::add_route,

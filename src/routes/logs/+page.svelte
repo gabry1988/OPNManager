@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import { mdiPlay, mdiPause, mdiInformation, mdiFilter } from '@mdi/js';
   import AppLayout from '../AppLayout.svelte';
 
@@ -32,18 +33,16 @@
   let filters: LogFilters | null = null;
   let interfaceNames: InterfaceNames | null = null;
   let isPlaying = true;
-  let updateInterval: number;
   let selectedLog: FirewallLog | null = null;
   let showModal = false;
   let showFilters = false;
-  let lastDigest = '';
 
   let selectedAction = '';
   let selectedInterface = '';
   let selectedDirection = '';
   const limit = 1000;
 
-  let logWorker: Worker;
+  let unlisten: () => void;
 
   function formatTimestamp(timestamp: string): string {
     const date = new Date(timestamp);
@@ -66,23 +65,9 @@
     }
   }
 
-  async function fetchAndProcessLogs() {
+  async function fetchLogs() {
     try {
-      const newLogs = await invoke<FirewallLog[]>('get_firewall_logs');
-      if (newLogs.length > 0) {
-        lastDigest = newLogs[0].digest || '';
-        logWorker.postMessage({
-          type: 'processlogs',
-          logs: newLogs,
-          currentLogs: logs,
-          filters: {
-            action: selectedAction,
-            interface: selectedInterface,
-            direction: selectedDirection
-          },
-          limit
-        });
-      }
+      logs = await invoke<FirewallLog[]>('get_firewall_logs');
     } catch (error) {
       console.error('Failed to fetch logs:', error);
     }
@@ -91,18 +76,33 @@
   function togglePlay() {
     isPlaying = !isPlaying;
     if (isPlaying) {
-      startUpdating();
+      startPolling();
     } else {
-      stopUpdating();
+      stopPolling();
     }
   }
 
-  function startUpdating() {
-    updateInterval = setInterval(fetchAndProcessLogs, 1000) as unknown as number;
+  async function startPolling() {
+    try {
+      await invoke('start_log_polling');
+
+      unlisten = await listen('firewall-logs-updated', (event) => {
+        logs = event.payload as FirewallLog[];
+      });
+    } catch (error) {
+      console.error('Failed to start log polling:', error);
+    }
   }
 
-  function stopUpdating() {
-    clearInterval(updateInterval);
+  async function stopPolling() {
+    try {
+      await invoke('stop_log_polling');
+      if (unlisten) {
+        unlisten();
+      }
+    } catch (error) {
+      console.error('Failed to stop log polling:', error);
+    }
   }
 
   function showLogDetails(log: FirewallLog) {
@@ -115,28 +115,33 @@
   }
 
   async function applyFilters() {
-    await fetchAndProcessLogs();
-    showFilters = false;
+    try {
+      await invoke('update_log_filters', {
+        action: selectedAction,
+        interface: selectedInterface, 
+        direction: selectedDirection,
+        limit
+      });
+
+      await fetchLogs();
+      
+      showFilters = false;
+    } catch (error) {
+      console.error('Failed to apply filters:', error);
+    }
   }
 
   onMount(async () => {
-    logWorker = new Worker(new URL('./logWorker.ts', import.meta.url), { type: 'module' });
-    logWorker.onmessage = (event) => {
-      if (event.data.type === 'processedlogs') {
-        logs = event.data.logs;
-      }
-    };
-
     await Promise.all([fetchLogFilters(), fetchInterfaceNames()]);
-    await fetchAndProcessLogs();
-    startUpdating();
+    await fetchLogs();
+    
+    if (isPlaying) {
+      await startPolling();
+    }
   });
 
-  onDestroy(() => {
-    stopUpdating();
-    if (logWorker) {
-      logWorker.terminate();
-    }
+  onDestroy(async () => {
+    await stopPolling();
   });
 </script>
 
