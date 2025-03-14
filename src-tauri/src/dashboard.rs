@@ -43,6 +43,14 @@ pub struct RestartServiceResponse {
     result: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SystemTime {
+    uptime: String,
+    datetime: String,
+    config: String,
+    loadavg: String,
+}
+
 #[tauri::command]
 pub async fn get_gateway_status(database: State<'_, Database>) -> Result<GatewayStatus, String> {
     let api_info = database
@@ -129,6 +137,36 @@ pub async fn restart_service(
 
     response
         .json::<RestartServiceResponse>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
+}
+
+
+#[tauri::command]
+pub async fn get_system_time(database: State<'_, Database>) -> Result<SystemTime, String> {
+    let api_info = database
+        .get_default_api_info()
+        .map_err(|e| format!("Failed to get API info: {}", e))?
+        .ok_or_else(|| "API info not found".to_string())?;
+
+    let url = format!(
+        "{}:{}/api/diagnostics/system/systemTime",
+        api_info.api_url, api_info.port
+    );
+
+    let response = make_http_request(
+        "GET",
+        &url,
+        None,
+        None,
+        Some(30),
+        Some(&api_info.api_key),
+        Some(&api_info.api_secret),
+    )
+    .await?;
+
+    response
+        .json::<SystemTime>()
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))
 }

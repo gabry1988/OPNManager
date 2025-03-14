@@ -62,6 +62,7 @@ pub fn run() {
             dashboard::get_gateway_status,
             dashboard::get_services,
             dashboard::restart_service,
+            dashboard::get_system_time,
             firewall::get_firewall_rules,
             firewall::toggle_firewall_rule,
             firewall::apply_firewall_changes,

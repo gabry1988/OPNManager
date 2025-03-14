@@ -19,7 +19,7 @@
     mdiServerNetwork,
     mdiEthernet,
     mdiServer,
-    mdiHarddisk
+    mdiHarddisk,
   } from "@mdi/js";
 
   interface InterfaceData {
@@ -64,6 +64,7 @@
     interfaceTraffic: InterfaceTraffic | null;
     systemResources?: SystemResources;
     systemDisk?: SystemDisk;
+    systemTime?: any;
   }
 
   let isFirstRun: boolean | null = null;
@@ -84,8 +85,9 @@
   // Reactive variables for memory and disk usage
   $: memoryUsagePercent = dashboardData.systemResources
     ? Math.round(
-        (dashboardData.systemResources.memory.used / 
-         parseInt(dashboardData.systemResources.memory.total)) * 100
+        (dashboardData.systemResources.memory.used /
+          parseInt(dashboardData.systemResources.memory.total)) *
+          100,
       )
     : 0;
 
@@ -95,7 +97,7 @@
 
   $: sortedInterfaces = dashboardData.interfaceTraffic
     ? Object.entries(dashboardData.interfaceTraffic.interfaces).sort(
-        ([, a], [, b]) => a.name.localeCompare(b.name)
+        ([, a], [, b]) => a.name.localeCompare(b.name),
       )
     : [];
 
@@ -114,21 +116,29 @@
 
   async function loadDashboardData() {
     try {
-      const [gatewayStatus, services, interfaceTraffic, systemResources, systemDisk] = 
-        await Promise.all([
-          invoke<any>("get_gateway_status"),
-          invoke<any>("get_services"),
-          invoke<InterfaceTraffic>("get_interface_traffic"),
-          invoke<SystemResources>("get_system_resources"),
-          invoke<SystemDisk>("get_system_disk")
-        ]);
-
-      dashboardData = { 
-        gatewayStatus, 
-        services, 
+      const [
+        gatewayStatus,
+        services,
         interfaceTraffic,
         systemResources,
-        systemDisk
+        systemDisk,
+        systemTime,
+      ] = await Promise.all([
+        invoke<any>("get_gateway_status"),
+        invoke<any>("get_services"),
+        invoke<InterfaceTraffic>("get_interface_traffic"),
+        invoke<SystemResources>("get_system_resources"),
+        invoke<SystemDisk>("get_system_disk"),
+        invoke<any>("get_system_time"),
+      ]);
+
+      dashboardData = {
+        gatewayStatus,
+        services,
+        interfaceTraffic,
+        systemResources,
+        systemDisk,
+        systemTime,
       };
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
@@ -150,15 +160,18 @@
   function startPolling() {
     pollInterval = window.setInterval(async () => {
       try {
-        const [interfaceTraffic, systemResources, systemDisk] = await Promise.all([
-          invoke<InterfaceTraffic>("get_interface_traffic"),
-          invoke<SystemResources>("get_system_resources"),
-          invoke<SystemDisk>("get_system_disk")
-        ]);
+        const [interfaceTraffic, systemResources, systemDisk, systemTime] =
+          await Promise.all([
+            invoke<InterfaceTraffic>("get_interface_traffic"),
+            invoke<SystemResources>("get_system_resources"),
+            invoke<SystemDisk>("get_system_disk"),
+            invoke<any>("get_system_time"),
+          ]);
 
         dashboardData.interfaceTraffic = interfaceTraffic;
         dashboardData.systemResources = systemResources;
         dashboardData.systemDisk = systemDisk;
+        dashboardData.systemTime = systemTime;
 
         progress = 0;
       } catch (error) {
@@ -199,14 +212,16 @@
     if (progressInterval) window.clearInterval(progressInterval);
   });
 
-  async function handleInitialSetup(event: CustomEvent<{
-    profileName: string;
-    apiKey: string;
-    apiSecret: string;
-    apiUrl: string;
-    port: number;
-    pin: string;
-  }>) {
+  async function handleInitialSetup(
+    event: CustomEvent<{
+      profileName: string;
+      apiKey: string;
+      apiSecret: string;
+      apiUrl: string;
+      port: number;
+      pin: string;
+    }>,
+  ) {
     const { profileName, apiKey, apiSecret, apiUrl, port, pin } = event.detail;
     try {
       await invoke("save_initial_config", {
@@ -254,9 +269,7 @@
         </p>
       </div>
       <div class="card bg-base-100 shadow-xl">
-        <InitialSetupForm
-          on:submit={handleInitialSetup}
-        />
+        <InitialSetupForm on:submit={handleInitialSetup} />
       </div>
     </div>
   </div>
@@ -269,16 +282,17 @@
 
       {#if dashboardData.gatewayStatus && dashboardData.services && dashboardData.interfaceTraffic}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <SystemResourcesColumn 
-            systemResources={dashboardData.systemResources} 
-            mainDisk={mainDisk}
+          <SystemResourcesColumn
+            systemResources={dashboardData.systemResources}
+            {mainDisk}
             services={dashboardData.services.rows}
+            systemTime={dashboardData.systemTime}
             {expandedServices}
             {toggleServicesExpansion}
             {restartService}
           />
 
-          <NetworkInformationColumn 
+          <NetworkInformationColumn
             gatewayStatus={dashboardData.gatewayStatus.items}
             {expandedGateway}
             {toggleGatewayExpansion}
