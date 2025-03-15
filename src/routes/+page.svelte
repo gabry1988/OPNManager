@@ -264,9 +264,6 @@
     <div class="max-w-md mx-auto space-y-8">
       <div class="text-center">
         <h1 class="text-3xl font-bold mb-2">Welcome to OPNsense Manager</h1>
-        <p class="text-base-content">
-          Please enter your API information and create a PIN to get started.
-        </p>
       </div>
       <div class="card bg-base-100 shadow-xl">
         <InitialSetupForm on:submit={handleInitialSetup} />

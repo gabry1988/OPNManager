@@ -49,6 +49,8 @@ pub fn run() {
             pin_cache::clear_pin,
             pin_cache::verify_pin,
             devices::get_devices,
+            devices::get_ndp_devices,
+            devices::get_combined_devices,
             devices::flush_arp_table,
             alias::list_network_aliases,
             alias::remove_ip_from_alias,
