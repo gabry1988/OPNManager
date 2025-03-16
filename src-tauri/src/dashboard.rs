@@ -141,7 +141,6 @@ pub async fn restart_service(
         .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
-
 #[tauri::command]
 pub async fn get_system_time(database: State<'_, Database>) -> Result<SystemTime, String> {
     let api_info = database

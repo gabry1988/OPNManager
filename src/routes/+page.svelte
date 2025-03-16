@@ -80,8 +80,7 @@
   let pollInterval: number;
   let progressInterval: number;
   let progress = 0;
-  const UPDATE_INTERVAL = 5000; 
-
+  const UPDATE_INTERVAL = 5000;
 
   $: memoryUsagePercent = dashboardData.systemResources
     ? Math.round(
@@ -195,6 +194,8 @@
       if (!isFirstRun) {
         authStore.setConfigured(true);
         if ($authStore.isLoggedIn) {
+          // Clear traffic cache explicitly when loading dashboard
+          await invoke("clear_traffic_cache");
           await loadDashboardData();
           startPolling();
         }
@@ -263,7 +264,7 @@
   <div class="min-h-screen bg-base-200 p-4">
     <div class="max-w-md mx-auto space-y-8">
       <div class="text-center">
-        <h1 class="text-3xl font-bold mb-2">Welcome to OPNsense Manager</h1>
+        <h1 class="text-3xl font-bold mb-2">Welcome to OPNManager</h1>
       </div>
       <div class="card bg-base-100 shadow-xl">
         <InitialSetupForm on:submit={handleInitialSetup} />

@@ -14,9 +14,10 @@ mod traffic;
 mod update_checker;
 
 use db::Database;
+use firewall_logs::register_log_cache;
 use pin_cache::PinCache;
 use tauri::Manager;
-use firewall_logs::register_log_cache; 
+use traffic::register_traffic_cache;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,8 +30,9 @@ pub fn run() {
 
             let db = Database::new(app.handle()).expect("Failed to initialize database");
             app.manage(db);
-            
+
             register_log_cache(app).expect("Failed to register log cache");
+            register_traffic_cache(app).expect("Failed to register traffic cache");
 
             Ok(())
         })
@@ -45,6 +47,7 @@ pub fn run() {
             commands::add_api_profile,
             commands::delete_api_profile,
             commands::set_default_profile,
+            commands::test_api_connection,
             pin_cache::set_pin,
             pin_cache::clear_pin,
             pin_cache::verify_pin,
@@ -89,6 +92,9 @@ pub fn run() {
             routes::apply_changes,
             power::reboot_firewall,
             traffic::get_interface_traffic,
+            traffic::get_traffic_graph_data,
+            traffic::update_traffic_data,
+            traffic::clear_traffic_cache,
             update_checker::get_current_firmware_status,
             update_checker::check_for_updates,
             update_checker::get_changelog,

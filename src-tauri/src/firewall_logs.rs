@@ -4,9 +4,9 @@ use log::error;
 use reqwest::header::{HeaderMap, ACCEPT};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::{Emitter, Manager, State, Window};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tauri::{Emitter, Manager, State, Window};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FirewallLog {
@@ -161,7 +161,10 @@ pub async fn get_interface_names(database: State<'_, Database>) -> Result<Interf
         .map_err(|e| format!("Failed to parse interface names: {}", e))
 }
 
-async fn fetch_firewall_logs(database: State<'_, Database>, digest: &str) -> Result<Vec<FirewallLog>, String> {
+async fn fetch_firewall_logs(
+    database: State<'_, Database>,
+    digest: &str,
+) -> Result<Vec<FirewallLog>, String> {
     let api_info = database
         .get_default_api_info()
         .map_err(|e| format!("Failed to get API info: {}", e))?
@@ -219,7 +222,7 @@ pub async fn get_firewall_logs(
         digest = cache.last_digest.clone();
     }
     let new_logs = fetch_firewall_logs(database, &digest).await?;
-    
+
     let mut cache = log_cache.lock().unwrap();
 
     if !new_logs.is_empty() {
@@ -245,26 +248,43 @@ pub async fn get_firewall_logs(
             }
         }
         if cache.logs.len() > cache.filter_criteria.limit * 2 {
-            cache.logs = cache.logs.iter()
+            cache.logs = cache
+                .logs
+                .iter()
                 .take(cache.filter_criteria.limit * 2)
                 .cloned()
                 .collect();
         }
-        
+
         cache.last_update = Instant::now();
     }
-    let filtered_logs = cache.logs.iter().filter(|log| {
-        (cache.filter_criteria.action.is_empty() 
-         || log.action.as_ref().map_or(false, |a| a == &cache.filter_criteria.action))
-        && (cache.filter_criteria.interface.is_empty() 
-           || log.interface.as_ref().map_or(false, |i| i == &cache.filter_criteria.interface))
-        && (cache.filter_criteria.direction.is_empty() 
-           || log.dir.as_ref().map_or(false, |d| d == &cache.filter_criteria.direction))
-    }).cloned().collect::<Vec<_>>();
+    let filtered_logs = cache
+        .logs
+        .iter()
+        .filter(|log| {
+            (cache.filter_criteria.action.is_empty()
+                || log
+                    .action
+                    .as_ref()
+                    .map_or(false, |a| a == &cache.filter_criteria.action))
+                && (cache.filter_criteria.interface.is_empty()
+                    || log
+                        .interface
+                        .as_ref()
+                        .map_or(false, |i| i == &cache.filter_criteria.interface))
+                && (cache.filter_criteria.direction.is_empty()
+                    || log
+                        .dir
+                        .as_ref()
+                        .map_or(false, |d| d == &cache.filter_criteria.direction))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
 
-    Ok(filtered_logs.into_iter()
-       .take(cache.filter_criteria.limit)
-       .collect())
+    Ok(filtered_logs
+        .into_iter()
+        .take(cache.filter_criteria.limit)
+        .collect())
 }
 
 #[tauri::command]
@@ -276,30 +296,33 @@ pub fn update_log_filters(
     limit: Option<usize>,
 ) -> Result<(), String> {
     let mut cache = log_cache.lock().unwrap();
-    
+
     cache.filter_criteria = LogFilterCriteria {
         action,
         interface,
         direction,
         limit: limit.unwrap_or(1000),
     };
-    
+
     Ok(())
 }
 
 #[tauri::command]
-pub fn start_log_polling(window: Window, log_cache: State<'_, Arc<Mutex<LogCache>>>) -> Result<(), String> {
+pub fn start_log_polling(
+    window: Window,
+    log_cache: State<'_, Arc<Mutex<LogCache>>>,
+) -> Result<(), String> {
     {
         let mut cache = log_cache.lock().unwrap();
         cache.active_listeners += 1;
     }
-    
+
     let log_cache_clone = log_cache.inner().clone();
     let window_clone = window.clone();
 
     tauri::async_runtime::spawn(async move {
         let database = window_clone.state::<Database>();
-        
+
         loop {
             let digest;
             {
@@ -338,24 +361,39 @@ pub fn start_log_polling(window: Window, log_cache: State<'_, Arc<Mutex<LogCache
                         });
 
                         if cache.logs.len() > cache.filter_criteria.limit * 2 {
-                            cache.logs = cache.logs.iter()
+                            cache.logs = cache
+                                .logs
+                                .iter()
                                 .take(cache.filter_criteria.limit * 2)
                                 .cloned()
                                 .collect();
                         }
 
-                        let filtered_logs = cache.logs.iter().filter(|log| {
-                            (cache.filter_criteria.action.is_empty() 
-                             || log.action.as_ref().map_or(false, |a| a == &cache.filter_criteria.action))
-                            && (cache.filter_criteria.interface.is_empty() 
-                               || log.interface.as_ref().map_or(false, |i| i == &cache.filter_criteria.interface))
-                            && (cache.filter_criteria.direction.is_empty() 
-                               || log.dir.as_ref().map_or(false, |d| d == &cache.filter_criteria.direction))
-                        }).cloned().take(cache.filter_criteria.limit).collect::<Vec<_>>();
+                        let filtered_logs = cache
+                            .logs
+                            .iter()
+                            .filter(|log| {
+                                (cache.filter_criteria.action.is_empty()
+                                    || log
+                                        .action
+                                        .as_ref()
+                                        .map_or(false, |a| a == &cache.filter_criteria.action))
+                                    && (cache.filter_criteria.interface.is_empty()
+                                        || log.interface.as_ref().map_or(false, |i| {
+                                            i == &cache.filter_criteria.interface
+                                        }))
+                                    && (cache.filter_criteria.direction.is_empty()
+                                        || log.dir.as_ref().map_or(false, |d| {
+                                            d == &cache.filter_criteria.direction
+                                        }))
+                            })
+                            .cloned()
+                            .take(cache.filter_criteria.limit)
+                            .collect::<Vec<_>>();
 
                         let _ = window_clone.emit("firewall-logs-updated", filtered_logs);
                     }
-                },
+                }
                 Err(e) => {
                     error!("Failed to fetch firewall logs: {}", e);
                 }
@@ -364,7 +402,7 @@ pub fn start_log_polling(window: Window, log_cache: State<'_, Arc<Mutex<LogCache
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     });
-    
+
     Ok(())
 }
 
@@ -381,6 +419,6 @@ pub fn stop_log_polling(log_cache: State<'_, Arc<Mutex<LogCache>>>) -> Result<()
 pub fn clear_log_cache(log_cache: State<'_, Arc<Mutex<LogCache>>>) -> Result<(), String> {
     let mut cache = log_cache.lock().unwrap();
     cache.logs.clear();
-    cache.last_digest = String::new(); 
+    cache.last_digest = String::new();
     Ok(())
 }

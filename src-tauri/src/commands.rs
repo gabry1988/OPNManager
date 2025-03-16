@@ -3,6 +3,7 @@ use crate::http_client::make_http_request;
 use crate::pin_cache::PinCache;
 use log::{error, info};
 use serde::Deserialize;
+use serde_json::Value;
 use tauri::State;
 
 #[tauri::command]
@@ -242,4 +243,41 @@ pub fn set_default_profile(profile_name: String, database: State<Database>) -> R
         error!("Failed to set default profile: {}", e);
         format!("Failed to set default profile: {}", e)
     })
+}
+
+#[tauri::command]
+pub async fn test_api_connection(
+    api_key: String,
+    api_secret: String,
+    api_url: String,
+    port: u16,
+) -> Result<bool, String> {
+    // Build the API URL for a simple endpoint (system information is a good test)
+    let url = format!("{}:{}/api/diagnostics/system/systemTime", api_url, port);
+
+    // Make the request using the provided credentials
+    let response = make_http_request(
+        "GET",
+        &url,
+        None,
+        None,
+        Some(10), // shorter timeout for testing
+        Some(&api_key),
+        Some(&api_secret),
+    )
+    .await;
+
+    match response {
+        Ok(resp) => {
+            // Try to parse the response as JSON to verify it's valid
+            match resp.json::<Value>().await {
+                Ok(_) => Ok(true), // Successfully connected and got valid JSON
+                Err(e) => Err(format!(
+                    "Connection succeeded but returned invalid data: {}",
+                    e
+                )),
+            }
+        }
+        Err(e) => Err(e),
+    }
 }

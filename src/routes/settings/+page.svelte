@@ -48,22 +48,26 @@
   }
 
   async function handleApiSubmit(event: CustomEvent<{profileName: string, apiKey: string, apiSecret: string, apiUrl: string, port: number, pin: string}>) {
-    const { profileName, apiKey, apiSecret, apiUrl, port, pin } = event.detail;
-    try {
-      if (isFirstRun) {
-        await invoke("save_initial_config", { profileName, apiKey, apiSecret, apiUrl, port: Number(port), pin });
-        isFirstRun = false;
-        authStore.setConfigured(true);
-        toasts.success("Initial configuration saved successfully!");
-      } else {
-        await invoke("update_api_info", { profileName, apiKey, apiSecret, apiUrl, port: Number(port) });
-        toasts.success("API information updated successfully!");
-      }
-      await loadApiInfo();
-    } catch (error) {
-      console.error("Failed to update API info:", error);
+  const { profileName, apiKey, apiSecret, apiUrl, port, pin } = event.detail;
+  try {
+    if (isFirstRun) {
+      await invoke("save_initial_config", { profileName, apiKey, apiSecret, apiUrl, port: Number(port), pin });
+      isFirstRun = false;
+      authStore.setConfigured(true);
+      toasts.success("Initial configuration saved successfully!");
+    } else {
+      await invoke("update_api_info", { profileName, apiKey, apiSecret, apiUrl, port: Number(port) });
+      
+      // Add this line to clear the traffic cache after updating API info
+      await invoke("clear_traffic_cache");
+      
+      toasts.success("API information updated successfully!");
     }
+    await loadApiInfo();
+  } catch (error) {
+    console.error("Failed to update API info:", error);
   }
+}
 
   async function handlePinSubmit() {
     if (isUpdatingPin) return; // Prevent multiple submissions
