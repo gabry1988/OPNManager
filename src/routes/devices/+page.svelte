@@ -16,7 +16,6 @@
     mdiIpNetworkOutline,
   } from "@mdi/js";
 
-  // Updated interface to match our combined device struct with multiple IPs
   interface CombinedDevice {
     mac: string;
     ipv4_addresses: string[];
@@ -63,7 +62,6 @@
 
   function applyFilters() {
     filteredDevices = devices.filter((device) => {
-      // Filter by IP (check both IPv4 and IPv6 addresses)
       const ipFilter = filters.ip.toLowerCase().trim();
 
       const ipv4Match =
@@ -75,8 +73,6 @@
         device.ipv6_addresses.some((ip) => ip.toLowerCase().includes(ipFilter));
 
       const ipMatch = ipv4Match || ipv6Match;
-
-      // Filter by MAC
       const macMatch =
         filters.mac.toLowerCase().trim() === "" ||
         device.mac.toLowerCase().includes(filters.mac.toLowerCase().trim());
@@ -127,6 +123,17 @@
     filters;
     if (devices.length > 0) {
       applyFilters();
+    }
+  }
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toasts.success("Copied to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+      toasts.error(
+        "Failed to copy text. Your browser may not support this feature.",
+      );
     }
   }
 </script>
@@ -186,7 +193,7 @@
         </div>
       </div>
 
-      <!-- Mobile card view (shown on small screens) -->
+      <!-- Updated Mobile card view (shown on small screens) -->
       <div class="md:hidden space-y-4">
         {#each filteredDevices as device}
           <div
@@ -230,19 +237,20 @@
 
               <div class="divider my-1"></div>
 
-              <div class="grid grid-cols-2 gap-2 text-sm">
+              <!-- Replace grid with flex column layout -->
+              <div class="flex flex-col gap-2 text-sm">
                 <div>
                   <div class="opacity-70">MAC Address</div>
-                  <div class="font-mono">{device.mac || "N/A"}</div>
+                  <div class="font-mono break-all">{device.mac || "N/A"}</div>
                 </div>
                 <div>
                   <div class="opacity-70">Interface</div>
-                  <div>{device.intf || "N/A"}</div>
+                  <div class="break-all">{device.intf || "N/A"}</div>
                 </div>
                 {#if device.hostname}
-                  <div class="col-span-2">
+                  <div>
                     <div class="opacity-70">Hostname</div>
-                    <div>{device.hostname}</div>
+                    <div class="break-all">{device.hostname}</div>
                   </div>
                 {/if}
               </div>
@@ -376,7 +384,7 @@
     </div>
   </div>
 
-  <!-- Modal -->
+  <!-- Modal with Copy Feature -->
   {#if isModalOpen && selectedDevice}
     <div
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
@@ -394,7 +402,21 @@
               >
               <ul class="mt-1 ml-5 list-disc">
                 {#each selectedDevice.ipv4_addresses as ipv4}
-                  <li>{ipv4}</li>
+                  <li class="flex items-center justify-between">
+                    <span>{ipv4}</span>
+                    <button
+                      class="btn btn-xs btn-ghost"
+                      on:click|stopPropagation={() => copyToClipboard(ipv4)}
+                      title="Copy IPv4 address"
+                    >
+                      <svg class="w-4 h-4" viewBox="0 0 24 24">
+                        <path
+                          fill="currentColor"
+                          d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"
+                        />
+                      </svg>
+                    </button>
+                  </li>
                 {/each}
               </ul>
             </div>
@@ -410,25 +432,93 @@
               >
               <ul class="mt-1 ml-5 list-disc">
                 {#each selectedDevice.ipv6_addresses as ipv6}
-                  <li class="break-all font-mono text-sm">{ipv6}</li>
+                  <li class="break-all font-mono text-sm flex items-center">
+                    <span class="flex-1 pr-2">{ipv6}</span>
+                    <button
+                      class="btn btn-xs btn-ghost flex-shrink-0"
+                      on:click|stopPropagation={() => copyToClipboard(ipv6)}
+                      title="Copy IPv6 address"
+                    >
+                      <svg class="w-4 h-4" viewBox="0 0 24 24">
+                        <path
+                          fill="currentColor"
+                          d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"
+                        />
+                      </svg>
+                    </button>
+                  </li>
                 {/each}
               </ul>
             </div>
           {/if}
 
-          <p>
-            <strong>MAC Address:</strong>
-            <span class="font-mono">{selectedDevice.mac || "N/A"}</span>
+          <!-- MAC Address -->
+          <p class="flex items-center justify-between">
+            <span>
+              <strong>MAC Address:</strong>
+              <span class="font-mono">{selectedDevice.mac || "N/A"}</span>
+            </span>
+            <button
+              class="btn btn-xs btn-ghost"
+              on:click|stopPropagation={() =>
+                copyToClipboard(selectedDevice.mac)}
+              title="Copy MAC address"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="currentColor"
+                  d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"
+                />
+              </svg>
+            </button>
           </p>
-          <p>
-            <strong>Hostname:</strong>
-            {selectedDevice.hostname || "Unknown"}
+
+          <!-- Hostname -->
+          <p class="flex items-center justify-between">
+            <span>
+              <strong>Hostname:</strong>
+              {selectedDevice.hostname || "Unknown"}
+            </span>
+            {#if selectedDevice.hostname}
+              <button
+                class="btn btn-xs btn-ghost"
+                on:click|stopPropagation={() =>
+                  copyToClipboard(selectedDevice.hostname)}
+                title="Copy hostname"
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24">
+                  <path
+                    fill="currentColor"
+                    d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"
+                  />
+                </svg>
+              </button>
+            {/if}
           </p>
-          <p>
-            <strong>Interface:</strong>
-            {selectedDevice.intf || "N/A"} ({selectedDevice.intf_description ||
-              "No description"})
+
+          <!-- Interface -->
+          <p class="flex items-center justify-between">
+            <span>
+              <strong>Interface:</strong>
+              {selectedDevice.intf || "N/A"} ({selectedDevice.intf_description ||
+                "No description"})
+            </span>
+            <button
+              class="btn btn-xs btn-ghost"
+              on:click|stopPropagation={() =>
+                copyToClipboard(selectedDevice.intf)}
+              title="Copy interface name"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="currentColor"
+                  d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"
+                />
+              </svg>
+            </button>
           </p>
+
+          <!-- Manufacturer -->
           <p>
             <strong>Manufacturer:</strong>
             {selectedDevice.manufacturer || "Unknown"}
