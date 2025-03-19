@@ -40,7 +40,6 @@
   }
 
   function handleLogout() {
-  // Instead of directly calling authStore.logout(), navigate to the logout route
   goto('/logout');
   isSidebarOpen = false;
 }

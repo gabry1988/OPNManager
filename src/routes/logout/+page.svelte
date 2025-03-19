@@ -7,28 +7,21 @@
     async function performLogout() {
       try {
         console.log("Starting cleanup processes...");
-        
-        // Clear traffic cache to stop traffic updates
+
         await invoke("clear_traffic_cache").catch(err => {
           console.error("Error clearing traffic cache:", err);
         });
-        
-        // Stop firewall logs polling if active
+
         await invoke("stop_log_polling").catch(err => {
           console.error("Error stopping log polling:", err);
         });
-        
-        // Clear the PIN cache - this is critical for security
+
         await invoke("clear_pin").catch(err => {
           console.error("Error clearing PIN cache:", err);
         });
         
         console.log("Cleanup complete, updating auth state...");
-        
-        // Update the auth store state
         authStore.logout();
-        
-        // Wait for 2 seconds before redirecting
         setTimeout(() => {
           console.log("Redirecting to login page...");
           goto('/');
@@ -36,7 +29,6 @@
         
       } catch (error) {
         console.error("Error during logout:", error);
-        // Even if there's an error, still redirect after delay
         setTimeout(() => goto('/'), 500);
       }
     }

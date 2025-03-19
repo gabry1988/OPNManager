@@ -523,8 +523,6 @@
     } else {
       window.removeEventListener("orientationchange", handleOrientationChange);
     }
-
-    // Explicitly clean up traffic data in backend
     try {
       invoke("clear_traffic_cache").catch((err) => {
         console.error(

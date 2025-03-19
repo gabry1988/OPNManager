@@ -222,81 +222,64 @@ pub async fn get_combined_devices(
             );
         }
     }
-
-    // Sort IPv4 and IPv6 addresses within each device
     for device in device_map.values_mut() {
-        // Sort IPv4 addresses naturally
-        device.ipv4_addresses.sort_by(|a, b| {
-            natural_sort(a, b)
-        });
-        
-        // Sort IPv6 addresses
+        device.ipv4_addresses.sort_by(|a, b| natural_sort(a, b));
         device.ipv6_addresses.sort();
     }
 
     let mut combined_devices: Vec<CombinedDevice> = device_map.into_values().collect();
-
-    // Sort the devices themselves by multiple criteria
     combined_devices.sort_by(|a, b| {
-        // First sort by interface name
         let intf_cmp = a.intf.cmp(&b.intf);
         if intf_cmp != std::cmp::Ordering::Equal {
             return intf_cmp;
         }
-        
-        // Then prioritize devices with IPv4 addresses
         let a_has_ipv4 = !a.ipv4_addresses.is_empty();
         let b_has_ipv4 = !b.ipv4_addresses.is_empty();
-        
+
         if a_has_ipv4 && !b_has_ipv4 {
             return std::cmp::Ordering::Less;
         } else if !a_has_ipv4 && b_has_ipv4 {
             return std::cmp::Ordering::Greater;
         }
-        
-        // If both have IPv4, compare the first IPv4 address
+
         if a_has_ipv4 && b_has_ipv4 {
             return natural_sort(&a.ipv4_addresses[0], &b.ipv4_addresses[0]);
         }
-        
-        // If neither has IPv4, compare the first IPv6 address
+
         if !a.ipv6_addresses.is_empty() && !b.ipv6_addresses.is_empty() {
             return a.ipv6_addresses[0].cmp(&b.ipv6_addresses[0]);
         }
-        
-        // If we got here, one of them has no addresses at all
+
         if a.ipv6_addresses.is_empty() && !b.ipv6_addresses.is_empty() {
             return std::cmp::Ordering::Greater;
         } else if !a.ipv6_addresses.is_empty() && b.ipv6_addresses.is_empty() {
             return std::cmp::Ordering::Less;
         }
-        
-        // Last resort: sort by MAC address
+
         a.mac.cmp(&b.mac)
     });
 
     Ok(combined_devices)
 }
 
-// Helper function for natural sorting of IP addresses
 fn natural_sort(a: &str, b: &str) -> std::cmp::Ordering {
     let a_parts: Vec<&str> = a.split('.').collect();
     let b_parts: Vec<&str> = b.split('.').collect();
-    
+
     for i in 0..4 {
         if i >= a_parts.len() || i >= b_parts.len() {
             return a_parts.len().cmp(&b_parts.len());
         }
-        
+
         let a_num = a_parts[i].parse::<u32>().unwrap_or(0);
         let b_num = b_parts[i].parse::<u32>().unwrap_or(0);
-        
+
         match a_num.cmp(&b_num) {
             std::cmp::Ordering::Equal => continue,
             other => return other,
         }
     }
-    
+
     std::cmp::Ordering::Equal
 }
 
