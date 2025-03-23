@@ -21,12 +21,19 @@
   import { page } from "$app/stores";
   import { invoke } from "@tauri-apps/api/core";
   import { toasts } from "$lib/stores/toastStore";
+  import { onMount } from "svelte";
+
+  // Add iOS-specific scroll handling
+  import { setupIOSScrolling } from "$lib/utils/iosScrollManager";
 
   export let title = "OPNManager";
   let isSidebarOpen = false;
   let isRebootDialogOpen = false;
   let theme = "light";
   let expandedCategories = { unbound: false };
+
+  // Add scroll manager reference
+  let scrollManager;
 
   const menuItems = [
     { path: "/", icon: mdiHome, label: "Home" },
@@ -35,27 +42,27 @@
     { path: "/routes", icon: mdiMapMarkerPath, label: "Routes" },
     { path: "/rules", icon: mdiWallFire, label: "Firewall Rules" },
     { path: "/logs", icon: mdiTextBoxSearch, label: "Firewall Logs" },
-    { 
-      category: "unbound", 
-      icon: mdiDnsOutline, 
+    {
+      category: "unbound",
+      icon: mdiDnsOutline,
       label: "Unbound",
       items: [
-        { path: "/unbound", icon: mdiDnsOutline, label: "DNS Blocklist" }
-      ]
+        { path: "/unbound", icon: mdiDnsOutline, label: "DNS Blocklist" },
+      ],
     },
     { path: "/updates", icon: mdiUpdate, label: "Updates" },
     { path: "/settings", icon: mdiCog, label: "Settings" },
   ];
-  
+
   function toggleSidebar() {
     isSidebarOpen = !isSidebarOpen;
   }
 
   function handleLogout() {
-    goto('/logout');
+    goto("/logout");
     isSidebarOpen = false;
   }
-  
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Enter" || event.key === " ") {
       toggleSidebar();
@@ -105,15 +112,47 @@
   function toggleTheme() {
     theme = theme === "light" ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", theme);
+
+    localStorage.setItem("theme", theme);
+
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+      const header = document.querySelector("header.fixed-header");
+      if (header) {
+        header.classList.add("theme-updating");
+        setTimeout(() => {
+          header.classList.remove("theme-updating");
+        }, 50);
+      }
+    }
   }
 
-  // Check if the current page is in a category or its items
   function isInCategory(category) {
-    return category.items && category.items.some(item => $page.url.pathname === item.path);
+    return (
+      category.items &&
+      category.items.some((item) => $page.url.pathname === item.path)
+    );
   }
+
+  onMount(() => {
+    const savedTheme = localStorage.getItem("theme") || "light";
+    theme = savedTheme;
+    document.documentElement.setAttribute("data-theme", theme);
+
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS) {
+      scrollManager = setupIOSScrolling();
+    }
+
+    return () => {
+      if (scrollManager && scrollManager.cleanup) {
+        scrollManager.cleanup();
+      }
+    };
+  });
 </script>
 
-<div class="flex h-screen bg-base-200">
+<div class="flex h-screen bg-base-200" id="app-layout-container">
   <!-- Sidebar -->
   <aside class="hidden lg:flex flex-col w-64 bg-base-100">
     <div class="flex items-center justify-center h-16 bg-primary">
@@ -127,7 +166,8 @@
               <button
                 on:click={() => toggleCategory(item.category)}
                 class="flex items-center justify-between w-full p-2 space-x-3 rounded-md hover:bg-base-200 transition-colors duration-200"
-                class:bg-base-300={isInCategory(item) || expandedCategories[item.category]}
+                class:bg-base-300={isInCategory(item) ||
+                  expandedCategories[item.category]}
                 aria-expanded={expandedCategories[item.category]}
               >
                 <div class="flex items-center space-x-3">
@@ -137,7 +177,12 @@
                   <span>{item.label}</span>
                 </div>
                 <svg class="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="currentColor" d={expandedCategories[item.category] ? mdiChevronUp : mdiChevronDown} />
+                  <path
+                    fill="currentColor"
+                    d={expandedCategories[item.category]
+                      ? mdiChevronUp
+                      : mdiChevronDown}
+                  />
                 </svg>
               </button>
               {#if expandedCategories[item.category]}
@@ -202,8 +247,8 @@
 
   <!-- Main content -->
   <div class="flex-1 flex flex-col overflow-hidden">
-    <!-- Top navbar -->
-    <header class="bg-base-100 border-b border-base-300">
+    <!-- Top navbar - using fixed-header class -->
+    <header class="bg-base-100 border-b border-base-300 fixed-header">
       <div class="flex items-center justify-between p-4">
         <div class="flex items-center space-x-4">
           <button
@@ -222,7 +267,7 @@
         <!-- Theme toggle button -->
         <button
           type="button"
-          class="p-1 rounded-md hover:bg-base-200 transition-colors duration-200"
+          class="p-1 rounded-md hover:bg-base-200 transition-colors duration-200 theme-toggle-btn"
           on:click={toggleTheme}
           aria-label="Toggle theme"
         >
@@ -233,8 +278,8 @@
       </div>
     </header>
 
-    <!-- Page content -->
-    <main class="flex-1 overflow-y-auto bg-base-200 p-6">
+    <!-- Page content - using page-content class -->
+    <main class="flex-1 overflow-y-auto bg-base-200 p-6 page-content">
       <slot></slot>
     </main>
   </div>
@@ -256,7 +301,7 @@
       <div class="flex items-center justify-center h-16 bg-primary">
         <span class="text-xl font-bold text-primary-content">{title}</span>
       </div>
-      <nav class="mt-5">
+      <nav class="mt-5 overflow-y-auto" style="max-height: calc(100% - 64px)">
         <ul class="p-2 space-y-2">
           {#each menuItems as item}
             {#if item.category}
@@ -264,7 +309,8 @@
                 <button
                   on:click={() => toggleCategory(item.category)}
                   class="flex items-center justify-between w-full p-2 space-x-3 rounded-md hover:bg-base-200 transition-colors duration-200"
-                  class:bg-base-300={isInCategory(item) || expandedCategories[item.category]}
+                  class:bg-base-300={isInCategory(item) ||
+                    expandedCategories[item.category]}
                   aria-expanded={expandedCategories[item.category]}
                 >
                   <div class="flex items-center space-x-3">
@@ -274,7 +320,12 @@
                     <span>{item.label}</span>
                   </div>
                   <svg class="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="currentColor" d={expandedCategories[item.category] ? mdiChevronUp : mdiChevronDown} />
+                    <path
+                      fill="currentColor"
+                      d={expandedCategories[item.category]
+                        ? mdiChevronUp
+                        : mdiChevronDown}
+                    />
                   </svg>
                 </button>
                 {#if expandedCategories[item.category]}
@@ -284,7 +335,8 @@
                         <button
                           on:click={() => handleNavigation(subItem.path)}
                           class="flex items-center w-full p-2 space-x-3 rounded-md hover:bg-base-200 transition-colors duration-200"
-                          class:bg-base-300={$page.url.pathname === subItem.path}
+                          class:bg-base-300={$page.url.pathname ===
+                            subItem.path}
                         >
                           <svg class="w-5 h-5" viewBox="0 0 24 24">
                             <path fill="currentColor" d={subItem.icon} />
@@ -420,3 +472,47 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /* iOS scrolling fixes */
+  @supports (-webkit-touch-callout: none) {
+    /* Add extra padding at the bottom of page content to help with "reachability" */
+    .page-content {
+      padding-bottom: 80px !important;
+    }
+
+    /* Ensure the fixed header doesn't disappear during scroll */
+    .fixed-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(8px);
+    }
+
+    /* Prevent "bounce" effect on the main layout container */
+    #app-layout-container {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Adjusted scrolling for the main content area */
+    .page-content {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: none;
+    }
+
+    /* Fix the height in iOS */
+    .min-h-screen {
+      min-height: -webkit-fill-available;
+    }
+  }
+
+  /* Original styles */
+  .btn-circle {
+    @apply rounded-full w-14 h-14 p-0 grid place-items-center;
+  }
+
+  .btn-lg {
+    @apply w-16 h-16;
+  }
+</style>
