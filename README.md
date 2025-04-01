@@ -8,13 +8,18 @@ OPNManager is a streamlined, user-friendly application designed to simplify the 
 
 ## Support the Project
 
-If you find this application useful, consider supporting its development:
+If you find this application useful, consider supporting its development or downloading it on iOS.
 
-<div style="text-align: center;">
-    <a href="https://www.buymeacoffee.com/swingline" target="_blank">
-        <img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174">
-    </a>
+<div align="center">
+  <a href="https://apps.apple.com/us/app/opnmanager/id6743677680?platform=iphone" target="_blank">
+    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="40">
+  </a>
+  <br><br>
+  <a href="https://www.buymeacoffee.com/swingline" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174">
+  </a>
 </div>
+
 
 ## Features
 
