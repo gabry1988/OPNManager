@@ -253,6 +253,16 @@ pub async fn test_api_connection(
     api_url: String,
     port: u16,
 ) -> Result<bool, String> {
+    // Validate URL format first
+    if api_url.ends_with('/') {
+        return Err("Invalid URL format: URL should not end with a trailing slash".to_string());
+    }
+    
+    // Check for path components or query strings
+    if api_url.contains('?') || api_url.matches('/').count() > 2 {
+        return Err("Invalid URL format: URL should be a base URL without paths or query parameters".to_string());
+    }
+    
     // Build the API URL for a simple endpoint (system information is a good test)
     let url = format!("{}:{}/api/diagnostics/system/systemTime", api_url, port);
 

@@ -92,7 +92,24 @@
             return false;
           }
 
-          new URL(apiUrl);
+          // Parse the URL to validate it
+          const urlObj = new URL(apiUrl);
+          
+          // Don't allow paths in the URL - only the hostname and protocol
+          if (urlObj.pathname !== "/" && urlObj.pathname !== "") {
+            errors.apiUrl = "Please enter only the base URL (no paths)";
+            return false;
+          }
+          
+          // Don't allow port numbers in the URL field - we have a separate port field
+          if (urlObj.port) {
+            errors.apiUrl = "Please enter the port number in the Port field";
+            return false;
+          }
+          
+          // Clean up the URL - remove trailing slash if present
+          apiUrl = `${urlObj.protocol}//${urlObj.hostname}`;
+          
         } catch (e) {
           errors.apiUrl = "Please enter a valid URL";
           return false;
@@ -137,6 +154,12 @@
   function handleNext() {
     if (validateCurrentStep()) {
       if (currentStep < totalSteps - 1) {
+        // If we've modified any settings and are now entering the final review page,
+        // reset the connection test status
+        if (currentStep === 5) {
+          connectionTestStatus = "none";
+          connectionErrorMessage = "";
+        }
         currentStep++;
       }
     }
@@ -144,6 +167,12 @@
 
   function handleBack() {
     if (currentStep > 0) {
+      // If we're going back from the review page or going back after already being 
+      // on the review page, reset the connection test status
+      if (currentStep === 6 || currentStep <= 5) {
+        connectionTestStatus = "none";
+        connectionErrorMessage = "";
+      }
       currentStep--;
     }
   }
@@ -181,16 +210,10 @@
     isTestingConnection = true;
 
     try {
-      // Ensure URL is formatted correctly
-      let formattedUrl = apiUrl;
-      if (formattedUrl.endsWith("/")) {
-        formattedUrl = formattedUrl.slice(0, -1);
-      }
-
       const result = await invoke("test_api_connection", {
         apiKey,
         apiSecret,
-        apiUrl: formattedUrl,
+        apiUrl,
         port: Number(port),
       });
 
@@ -385,6 +408,17 @@
               type="url"
               placeholder="https://192.168.1.1"
               class="input input-bordered w-full {errors.apiUrl ? 'input-error' : ''}"
+              on:blur={() => {
+                // Auto-format URL on blur
+                if (apiUrl.trim()) {
+                  try {
+                    const urlObj = new URL(apiUrl);
+                    apiUrl = `${urlObj.protocol}//${urlObj.hostname}`;
+                  } catch (e) {
+                    // Invalid URL, let the form validation handle it
+                  }
+                }
+              }}
             />
             {#if errors.apiUrl}
               <label class="label py-1">
@@ -403,6 +437,7 @@
               <li>https://192.168.1.1</li>
               <li>https://firewall.home.lan</li>
               <li>https://opnsense.mydomain.com</li>
+              <li class="text-warning">(Do not include trailing slashes or port numbers)</li>
             </ul>
           </div>
         </div>
@@ -502,11 +537,11 @@
             <h2 class="card-title text-lg">Review & Confirm</h2>
           </div>
 
-          <div class="alert alert-success mb-3 p-2 sm:p-3 text-sm">
+          <div class="alert alert-info mb-3 p-2 sm:p-3 text-sm">
             <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
               <path fill="currentColor" d={mdiInformationOutline} />
             </svg>
-            <span>Almost done! Please review your information before saving.</span>
+            <span>Almost done! Please test your connection before saving.</span>
           </div>
 
           <div class="bg-base-200 p-3 rounded-lg mb-3">
@@ -576,11 +611,18 @@
                 </svg>
                 <span>Connection failed. Please check your settings.</span>
               </div>
+            {:else}
+              <div class="alert alert-warning py-2 text-sm">
+                <svg class="h-4 w-4 flex-shrink-0" viewBox="0 0 24 24">
+                  <path fill="currentColor" d={mdiInformationOutline} />
+                </svg>
+                <span>Please test your connection before saving.</span>
+              </div>
             {/if}
           </div>
 
           <div class="bg-base-200 p-2 sm:p-3 rounded-lg text-xs">
-            <p>Click "Save Configuration" to complete setup and start managing your OPNsense firewall.</p>
+            <p>Once connection is successful, click "Save Configuration" to complete setup and start managing your OPNsense firewall.</p>
           </div>
         </div>
       {/if}
@@ -610,7 +652,7 @@
           <button
             class="btn btn-primary btn-sm sm:btn-md"
             on:click={handleSubmit}
-            disabled={connectionTestStatus === "error" || isTestingConnection}
+            disabled={connectionTestStatus !== "success" || isTestingConnection}
           >
             Save Configuration
           </button>

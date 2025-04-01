@@ -30,6 +30,12 @@
   let newApiSecret = "";
   let newApiUrl = "";
   let newPort = 443;
+  
+  // Add validation state
+  let errors = {
+    apiUrl: "",
+    newApiUrl: ""
+  };
 
   const dispatch = createEventDispatcher<{
     error: { message: string };
@@ -103,8 +109,56 @@
       dispatch("error", { message: "Failed to set default profile" });
     }
   }
+  
+  function validateUrl(url: string): { isValid: boolean; error: string; formattedUrl: string } {
+    // Reset error for this field
+    let error = "";
+    let formattedUrl = url;
+    
+    try {
+      // Basic URL validation
+      if (!url.trim()) {
+        return { isValid: false, error: "Firewall address is required", formattedUrl };
+      }
+
+      // Ensure URL has https:// prefix
+      if (!url.startsWith("https://")) {
+        return { isValid: false, error: "URL must start with https://", formattedUrl };
+      }
+
+      // Parse the URL to validate it
+      const urlObj = new URL(url);
+      
+      // Don't allow paths in the URL - only the hostname and protocol
+      if (urlObj.pathname !== "/" && urlObj.pathname !== "") {
+        return { isValid: false, error: "Please enter only the base URL (no paths)", formattedUrl };
+      }
+      
+      // Don't allow port numbers in the URL field - we have a separate port field
+      if (urlObj.port) {
+        return { isValid: false, error: "Please enter the port number in the Port field", formattedUrl };
+      }
+      
+      // Clean up the URL - remove trailing slash if present
+      formattedUrl = `${urlObj.protocol}//${urlObj.hostname}`;
+      return { isValid: true, error: "", formattedUrl };
+      
+    } catch (e) {
+      return { isValid: false, error: "Please enter a valid URL", formattedUrl };
+    }
+  }
 
   async function handleSubmit(): Promise<void> {
+    // Validate URL
+    const urlValidation = validateUrl(apiUrl);
+    if (!urlValidation.isValid) {
+      errors.apiUrl = urlValidation.error;
+      return;
+    }
+    
+    // Use the properly formatted URL
+    apiUrl = urlValidation.formattedUrl;
+    
     try {
       await invoke("update_api_info", {
         profileName: selectedProfileName,
@@ -127,6 +181,36 @@
       dispatch("error", { message: "Failed to update API information" });
     }
   }
+  
+  function formatUrl(event: Event, isNew = false) {
+    const input = event.target as HTMLInputElement;
+    const url = input.value;
+    
+    if (url.trim()) {
+      try {
+        const urlObj = new URL(url);
+        const formattedUrl = `${urlObj.protocol}//${urlObj.hostname}`;
+        
+        if (isNew) {
+          newApiUrl = formattedUrl;
+          errors.newApiUrl = "";
+        } else {
+          apiUrl = formattedUrl;
+          errors.apiUrl = "";
+        }
+      } catch (e) {
+        // Invalid URL, let form validation handle it
+      }
+    }
+  }
+  
+  function validateNewUrl(): boolean {
+    const urlValidation = validateUrl(newApiUrl);
+    errors.newApiUrl = urlValidation.error;
+    newApiUrl = urlValidation.formattedUrl;
+    return urlValidation.isValid;
+  }
+
   function openDeleteConfirmation(): void {
     showDeleteConfirmation = true;
   }
@@ -147,8 +231,17 @@
       closeDeleteConfirmation();
     }
   }
+  
   function openAddProfileModal(): void {
     showAddProfileModal = true;
+    
+    // Reset fields and errors
+    newProfileName = "";
+    newApiKey = "";
+    newApiSecret = "";
+    newApiUrl = "";
+    newPort = 443;
+    errors.newApiUrl = "";
   }
 
   function closeAddProfileModal(): void {
@@ -158,9 +251,15 @@
     newApiSecret = "";
     newApiUrl = "";
     newPort = 443;
+    errors.newApiUrl = "";
   }
 
   async function addNewProfile(): Promise<void> {
+    // Validate URL
+    if (!validateNewUrl()) {
+      return;
+    }
+    
     try {
       await invoke("add_api_profile", {
         profile: {
@@ -256,10 +355,20 @@
         id="apiUrl"
         bind:value={apiUrl}
         type="url"
-        placeholder="API URL"
-        class="input input-bordered w-full"
+        placeholder="API URL (ex: https://192.168.1.1)"
+        class="input input-bordered w-full {errors.apiUrl ? 'input-error' : ''}"
+        on:blur={(e) => formatUrl(e)}
         required
       />
+      {#if errors.apiUrl}
+        <label class="label">
+          <span class="label-text-alt text-error">{errors.apiUrl}</span>
+        </label>
+      {:else}
+        <label class="label">
+          <span class="label-text-alt text-xs">Enter only the base URL without trailing slashes or port number</span>
+        </label>
+      {/if}
     </div>
 
     <div class="form-control">
@@ -375,10 +484,20 @@
             id="newApiUrl"
             bind:value={newApiUrl}
             type="url"
-            placeholder="Enter API URL"
-            class="input input-bordered w-full"
+            placeholder="Enter API URL (ex: https://192.168.1.1)"
+            class="input input-bordered w-full {errors.newApiUrl ? 'input-error' : ''}"
+            on:blur={(e) => formatUrl(e, true)}
             required
           />
+          {#if errors.newApiUrl}
+            <label class="label">
+              <span class="label-text-alt text-error">{errors.newApiUrl}</span>
+            </label>
+          {:else}
+            <label class="label">
+              <span class="label-text-alt text-xs">Enter only the base URL without trailing slashes or port number</span>
+            </label>
+          {/if}
         </div>
         <div class="form-control">
           <label class="label" for="newPort">
