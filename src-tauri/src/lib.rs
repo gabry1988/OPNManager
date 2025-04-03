@@ -104,6 +104,7 @@ pub fn run() {
             update_checker::start_update,
             system_resources::get_system_resources,
             system_resources::get_system_disk,
+            system_resources::get_system_temperature,
             unbound::get_unbound_settings,
             unbound::set_dnsbl_settings,
             unbound::apply_dnsbl_settings,

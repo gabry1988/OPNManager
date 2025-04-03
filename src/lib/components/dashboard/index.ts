@@ -6,3 +6,4 @@ export { default as InterfaceTrafficCard } from './InterfaceTrafficCard.svelte';
 export { default as SystemResourcesColumn } from './SystemResourcesColumn.svelte';
 export { default as NetworkInformationColumn } from './NetworkInformationColumn.svelte';
 export { default as UptimeCard } from './UptimeCard.svelte';
+export { default as CpuTemperatureCard } from './CpuTemperatureCard.svelte';

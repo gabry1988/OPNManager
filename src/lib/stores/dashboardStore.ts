@@ -10,11 +10,12 @@ export interface DashboardWidgetPref {
 const DEFAULT_WIDGETS: DashboardWidgetPref[] = [
   { widget_key: 'uptime', visible: true, position: 0 },
   { widget_key: 'memory', visible: true, position: 1 },
-  { widget_key: 'disk', visible: true, position: 2 },
-  { widget_key: 'services', visible: true, position: 3 },
-  { widget_key: 'traffic_graph', visible: true, position: 4 },
-  { widget_key: 'gateways', visible: true, position: 5 },
-  { widget_key: 'interfaces', visible: true, position: 6 },
+  { widget_key: 'cpu_temp', visible: true, position: 2 },
+  { widget_key: 'disk', visible: true, position: 3 },
+  { widget_key: 'services', visible: true, position: 4 },
+  { widget_key: 'traffic_graph', visible: true, position: 5 },
+  { widget_key: 'gateways', visible: true, position: 6 },
+  { widget_key: 'interfaces', visible: true, position: 7 },
 ];
 
 function createDashboardStore() {

@@ -7,6 +7,7 @@
   import InitialSetupForm from "$lib/components/forms/InitialSetupForm.svelte";
   import DashboardConfig from "$lib/components/dashboard/DashboardConfig.svelte";
   import InterfaceTrafficGraph from "$lib/components/dashboard/InterfaceTrafficGraph.svelte";
+import CpuTemperatureCard from "$lib/components/dashboard/CpuTemperatureCard.svelte";
   import { toasts } from "$lib/stores/toastStore";
   import { authStore } from "$lib/stores/authStore";
   import { dashboardStore } from "$lib/stores/dashboardStore";
@@ -59,6 +60,18 @@
     devices: DiskDevice[];
   }
 
+  interface TemperatureSensor {
+    device: string;
+    device_seq: string;
+    temperature: string;
+    sensor_type: string;
+    sensor_type_translated: string;
+  }
+
+  interface SystemTemperature {
+    sensors: TemperatureSensor[];
+  }
+
   interface DashboardData {
     gatewayStatus: any;
     services: any;
@@ -66,6 +79,7 @@
     systemResources?: SystemResources;
     systemDisk?: SystemDisk;
     systemTime?: any;
+    systemTemperature?: SystemTemperature;
   }
 
   let isFirstRun: boolean | null = null;
@@ -123,6 +137,7 @@
         systemResources,
         systemDisk,
         systemTime,
+        systemTemperature,
       ] = await Promise.all([
         invoke<any>("get_gateway_status"),
         invoke<any>("get_services"),
@@ -130,6 +145,7 @@
         invoke<SystemResources>("get_system_resources"),
         invoke<SystemDisk>("get_system_disk"),
         invoke<any>("get_system_time"),
+        invoke<SystemTemperature>("get_system_temperature").catch(() => ({ sensors: [] })),
       ]);
 
       dashboardData = {
@@ -139,6 +155,7 @@
         systemResources,
         systemDisk,
         systemTime,
+        systemTemperature,
       };
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
@@ -160,18 +177,20 @@
   function startPolling() {
     pollInterval = window.setInterval(async () => {
       try {
-        const [interfaceTraffic, systemResources, systemDisk, systemTime] =
+        const [interfaceTraffic, systemResources, systemDisk, systemTime, systemTemperature] =
           await Promise.all([
             invoke<InterfaceTraffic>("get_interface_traffic"),
             invoke<SystemResources>("get_system_resources"),
             invoke<SystemDisk>("get_system_disk"),
             invoke<any>("get_system_time"),
+            invoke<SystemTemperature>("get_system_temperature").catch(() => ({ sensors: [] })),
           ]);
 
         dashboardData.interfaceTraffic = interfaceTraffic;
         dashboardData.systemResources = systemResources;
         dashboardData.systemDisk = systemDisk;
         dashboardData.systemTime = systemTime;
+        dashboardData.systemTemperature = systemTemperature;
 
         progress = 0;
       } catch (error) {
@@ -266,12 +285,12 @@
 
   function getResourceWidgetOrder(): string[] {
     if (!$dashboardStore.isLoaded) {
-      return ["uptime", "memory", "disk", "services"];
+      return ["uptime", "memory", "cpu_temp", "disk", "services"];
     }
 
     return $dashboardStore.widgets
       .filter((w) =>
-        ["uptime", "memory", "disk", "services"].includes(w.widget_key),
+        ["uptime", "memory", "cpu_temp", "disk", "services"].includes(w.widget_key),
       )
       .sort((a, b) => a.position - b.position)
       .map((w) => w.widget_key);
@@ -295,6 +314,7 @@
       return [
         "uptime",
         "memory",
+        "cpu_temp",
         "disk",
         "services",
         "traffic_graph",
@@ -444,6 +464,10 @@
                     </div>
                   </div>
                 </div>
+              {/if}
+              
+              {#if widgetKey === "cpu_temp" && dashboardData.systemTemperature}
+                <CpuTemperatureCard temperatureData={dashboardData.systemTemperature} />
               {/if}
 
               {#if widgetKey === "disk" && mainDisk}
@@ -980,6 +1004,10 @@
                       </div>
                     </div>
                   </div>
+                {/if}
+                
+                {#if widgetKey === "cpu_temp" && dashboardData.systemTemperature}
+                  <CpuTemperatureCard temperatureData={dashboardData.systemTemperature} />
                 {/if}
 
                 {#if widgetKey === "disk" && mainDisk}
