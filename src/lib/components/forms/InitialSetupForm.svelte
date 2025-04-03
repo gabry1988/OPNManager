@@ -86,9 +86,9 @@
             return false;
           }
 
-          // Ensure URL has https:// prefix
-          if (!apiUrl.startsWith("https://")) {
-            errors.apiUrl = "URL must start with https://";
+          // Ensure URL has http:// or https:// prefix
+          if (!apiUrl.startsWith("https://") && !apiUrl.startsWith("http://")) {
+            errors.apiUrl = "URL must start with http:// or https://";
             return false;
           }
 
@@ -406,7 +406,7 @@
               id="apiUrl"
               bind:value={apiUrl}
               type="url"
-              placeholder="https://192.168.1.1"
+              placeholder="https://192.168.1.1 or http://192.168.1.1"
               class="input input-bordered w-full {errors.apiUrl ? 'input-error' : ''}"
               on:blur={() => {
                 // Auto-format URL on blur
@@ -435,7 +435,7 @@
             <p class="font-medium">Examples of valid firewall addresses:</p>
             <ul class="list-disc list-inside space-y-1 ml-1 mt-1">
               <li>https://192.168.1.1</li>
-              <li>https://firewall.home.lan</li>
+              <li>http://firewall.home.lan</li>
               <li>https://opnsense.mydomain.com</li>
               <li class="text-warning">(Do not include trailing slashes or port numbers)</li>
             </ul>

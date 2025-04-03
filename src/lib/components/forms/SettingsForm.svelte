@@ -121,9 +121,9 @@
         return { isValid: false, error: "Firewall address is required", formattedUrl };
       }
 
-      // Ensure URL has https:// prefix
-      if (!url.startsWith("https://")) {
-        return { isValid: false, error: "URL must start with https://", formattedUrl };
+      // Ensure URL has http:// or https:// prefix
+      if (!url.startsWith("https://") && !url.startsWith("http://")) {
+        return { isValid: false, error: "URL must start with http:// or https://", formattedUrl };
       }
 
       // Parse the URL to validate it
@@ -355,7 +355,7 @@
         id="apiUrl"
         bind:value={apiUrl}
         type="url"
-        placeholder="API URL (ex: https://192.168.1.1)"
+        placeholder="API URL (ex: https://192.168.1.1 or http://192.168.1.1)"
         class="input input-bordered w-full {errors.apiUrl ? 'input-error' : ''}"
         on:blur={(e) => formatUrl(e)}
         required
@@ -484,7 +484,7 @@
             id="newApiUrl"
             bind:value={newApiUrl}
             type="url"
-            placeholder="Enter API URL (ex: https://192.168.1.1)"
+            placeholder="Enter API URL (ex: https://192.168.1.1 or http://192.168.1.1)"
             class="input input-bordered w-full {errors.newApiUrl ? 'input-error' : ''}"
             on:blur={(e) => formatUrl(e, true)}
             required
