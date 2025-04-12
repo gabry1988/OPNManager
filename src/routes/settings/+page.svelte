@@ -56,9 +56,18 @@
       authStore.setConfigured(true);
       toasts.success("Initial configuration saved successfully!");
     } else {
-      await invoke("update_api_info", { profileName, apiKey, apiSecret, apiUrl, port: Number(port) });
+      // Just save the new API info directly without validation
+      // This allows users to update revoked API keys with new ones
+      await invoke("update_api_info", { 
+        profileName, 
+        apiKey, 
+        apiSecret, 
+        apiUrl, 
+        port: Number(port),
+        isDefault: true
+      });
       
-      // Add this line to clear the traffic cache after updating API info
+      // Clear the traffic cache after updating API info
       await invoke("clear_traffic_cache");
       
       toasts.success("API information updated successfully!");
@@ -66,12 +75,14 @@
     await loadApiInfo();
   } catch (error) {
     console.error("Failed to update API info:", error);
+    toasts.error(`Failed to update API info: ${error}`);
   }
 }
 
   async function handlePinSubmit() {
     if (isUpdatingPin) return; // Prevent multiple submissions
     
+    // Client-side validation
     if (newPin !== confirmNewPin) {
       toasts.error("New PINs do not match.");
       return;
@@ -81,14 +92,34 @@
       toasts.error("PIN must contain only numbers.");
       return;
     }
+    
+    if (newPin.length < 4) {
+      toasts.error("PIN must be at least 4 digits long.");
+      return;
+    }
+
+    if (currentPin === newPin) {
+      toasts.error("New PIN must be different from current PIN.");
+      return;
+    }
 
     isUpdatingPin = true; // Set this before the async operation
     
     try {
-      // Use setTimeout to give the UI a chance to update before starting the CPU-intensive operation
+      // Provide helpful message while processing
+      toasts.info("Updating PIN and re-encrypting credentials... This may take a moment.");
+      
+      // Use setTimeout to give the UI a chance to update first
       setTimeout(async () => {
         try {
-          await invoke("update_pin", { currentPin, newPin, confirmNewPin });
+          console.log("Starting PIN update process");
+          
+          // Proceed with the update
+          await invoke("update_pin", { 
+            currentPin, 
+            newPin, 
+            confirmNewPin 
+          });
           
           // Clear form values
           currentPin = "";
@@ -100,18 +131,21 @@
           // Give the UI time to show the success message
           setTimeout(() => {
             handleLogout();
-          }, 1500);
+          }, 2000);
         } catch (error) {
           console.error("Failed to update PIN:", error);
           isUpdatingPin = false; // Important to reset this in case of error
           
+          // Display the exact error message from the backend
           if (error instanceof Error) {
-            toasts.error(error.message);
+            toasts.error(`Failed to update PIN: ${error.message}`);
+          } else if (typeof error === 'string') {
+            toasts.error(`Failed to update PIN: ${error}`);
           } else {
-            toasts.error("An unknown error occurred.");
+            toasts.error("Failed to update PIN: An unknown error occurred.");
           }
         }
-      }, 50); // Small delay to allow the UI to update first
+      }, 100); // Small delay to allow the UI to update first
     } catch (error) {
       isUpdatingPin = false; // Reset in case of error
       console.error("Unexpected error:", error);
@@ -177,7 +211,6 @@
             showPin={isFirstRun}
             on:submit={handleApiSubmit}
             on:error={handleFormError}
-            on:success={handleFormSuccess}
           />
         </div>
       {:else if activeTab === 'pin'}

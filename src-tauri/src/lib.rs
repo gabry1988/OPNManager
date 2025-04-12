@@ -6,9 +6,11 @@ mod devices;
 mod firewall;
 mod firewall_logs;
 mod http_client;
+mod interfaces;
 mod pin_cache;
 mod power;
 mod routes;
+mod snapshots;
 mod system_resources;
 mod traffic;
 mod unbound;
@@ -93,7 +95,16 @@ pub fn run() {
             routes::delete_route,
             routes::toggle_route,
             routes::apply_changes,
+            routes::get_route_table,
             power::reboot_firewall,
+            snapshots::is_snapshots_supported,
+            snapshots::get_snapshots,
+            snapshots::get_new_snapshot,
+            snapshots::get_snapshot,
+            snapshots::add_snapshot,
+            snapshots::delete_snapshot,
+            snapshots::activate_snapshot,
+            snapshots::update_snapshot,
             traffic::get_interface_traffic,
             traffic::get_traffic_graph_data,
             traffic::update_traffic_data,
@@ -112,6 +123,8 @@ pub fn run() {
             unbound::add_dnsbl_cron_job,
             unbound::delete_dnsbl_cron_job,
             unbound::apply_cron_changes,
+            interfaces::get_interfaces,
+            interfaces::get_interface_details,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
