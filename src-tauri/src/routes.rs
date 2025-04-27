@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::http_client::make_http_request;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use tauri::State;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -282,7 +282,9 @@ pub async fn apply_changes(database: State<'_, Database>) -> Result<ReconfigureR
 }
 
 #[tauri::command]
-pub async fn get_route_table(database: State<'_, Database>) -> Result<Vec<RouteTableEntry>, String> {
+pub async fn get_route_table(
+    database: State<'_, Database>,
+) -> Result<Vec<RouteTableEntry>, String> {
     let api_info = database
         .get_default_api_info()
         .map_err(|e| format!("Failed to get API info: {}", e))?
