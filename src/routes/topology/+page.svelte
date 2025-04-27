@@ -8,6 +8,7 @@
   import { mdiRefresh, mdiInformation, mdiEye, mdiEyeOff, mdiMenuDown } from "@mdi/js";
   import type { Interface } from "$lib/components/topology/types";
   import type { CombinedDevice } from "$lib/components/topology/types";
+  import { preventIOSInputScroll } from "$lib/utils/iosFocusFix";
 
   let interfaces: Interface[] = [];
   let devices: CombinedDevice[] = [];
@@ -24,6 +25,20 @@
 
   onMount(async () => {
     await fetchData();
+    
+    // Apply iOS specific fixes
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      preventIOSInputScroll();
+      
+      // Add click handler for the entire document to help with iOS touch events
+      document.addEventListener('click', (e) => {
+        if (isFilterDropdownOpen && 
+            !e.target.closest('.dropdown-content') && 
+            !e.target.closest('button[on\\:click="toggleFilterDropdown"]')) {
+          isFilterDropdownOpen = false;
+        }
+      });
+    }
   });
 
   async function fetchData() {
@@ -307,20 +322,49 @@
   }
   
   function toggleInterface(ifaceName: string) {
+    // Create a copy of the array to ensure reactivity
+    let newSelectedInterfaces;
+    
     if (selectedInterfaces.includes(ifaceName)) {
-      selectedInterfaces = selectedInterfaces.filter(name => name !== ifaceName);
+      newSelectedInterfaces = selectedInterfaces.filter(name => name !== ifaceName);
     } else {
-      selectedInterfaces = [...selectedInterfaces, ifaceName];
+      newSelectedInterfaces = [...selectedInterfaces, ifaceName];
+    }
+    
+    // Force update and trigger reactive statement
+    selectedInterfaces = newSelectedInterfaces;
+    
+    console.log(`Toggle interface ${ifaceName}, new selectedInterfaces:`, selectedInterfaces);
+    
+    // Close dropdown on iOS after selection to prevent issues
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      setTimeout(() => {
+        isFilterDropdownOpen = false;
+      }, 300);
     }
   }
   
   function toggleAllInterfaces() {
+    let newSelectedInterfaces;
+    
     if (selectedInterfaces.length === getActiveInterfaces().length) {
       // If all are selected, deselect all
-      selectedInterfaces = [];
+      newSelectedInterfaces = [];
     } else {
       // Otherwise, select all
-      selectedInterfaces = getActiveInterfaces().map(iface => iface.device);
+      newSelectedInterfaces = getActiveInterfaces().map(iface => iface.device);
+    }
+    
+    // Force update and trigger reactive statement
+    selectedInterfaces = newSelectedInterfaces;
+    
+    console.log("Toggle all interfaces, new selectedInterfaces:", selectedInterfaces);
+    
+    // Close dropdown on iOS after selection to prevent issues
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      setTimeout(() => {
+        isFilterDropdownOpen = false;
+      }, 300);
     }
   }
   
@@ -331,8 +375,42 @@
     );
   }
   
-  function toggleFilterDropdown() {
+  function toggleFilterDropdown(event) {
+    // Prevent event bubbling
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
     isFilterDropdownOpen = !isFilterDropdownOpen;
+    
+    // iOS specific handling
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      // Close with delayed reopen to ensure proper rendering
+      if (isFilterDropdownOpen) {
+        // Ensure container has proper positioning
+        const container = document.querySelector('.dropdown.dropdown-end');
+        if (container) {
+          container.style.position = 'relative';
+          
+          // Get button position to properly position dropdown
+          setTimeout(() => {
+            const button = document.getElementById('interfaces-dropdown-button');
+            const dropdown = document.querySelector('.ios-dropdown-fix');
+            
+            if (dropdown && button) {
+              // Position dropdown relative to button
+              dropdown.style.position = 'absolute';
+              dropdown.style.top = (button.offsetHeight + 2) + 'px';
+              dropdown.style.left = '0px';
+              dropdown.style.display = 'block';
+              dropdown.style.webkitTransform = 'translateZ(0)';
+              dropdown.style.transform = 'translateZ(0)';
+            }
+          }, 50);
+        }
+      }
+    }
   }
   
   // Filter interfaces based on selection
@@ -359,11 +437,12 @@
       <h1 class="text-2xl font-bold">Network Topology</h1>
       
       <div class="flex flex-wrap gap-2">
-        <!-- Interface selection dropdown -->
-        <div class="dropdown dropdown-end">
+        <!-- Interface selection dropdown with iOS fixes -->
+        <div class="dropdown dropdown-end" style="position: relative;">
           <button 
             class="btn btn-sm btn-primary text-white flex items-center gap-1" 
             on:click={toggleFilterDropdown}
+            id="interfaces-dropdown-button"
           >
             <span>Interfaces</span>
             <svg class="w-5 h-5" viewBox="0 0 24 24">
@@ -372,50 +451,36 @@
           </button>
           
           {#if isFilterDropdownOpen}
-            <div class="dropdown-content z-30 menu p-2 shadow bg-base-100 border border-base-300 rounded-box w-64 mt-1">
-              <div class="p-2 border-b border-base-300">
-                <label class="cursor-pointer label justify-start gap-2">
-                  <input 
-                    type="checkbox" 
-                    class="checkbox checkbox-sm checkbox-primary" 
-                    checked={selectedInterfaces.length === totalActiveInterfaces}
-                    on:change={toggleAllInterfaces}
-                  />
-                  <span class="label-text font-medium">Select All ({totalActiveInterfaces})</span>
-                </label>
+            <!-- Using better positioning relative to the Interfaces button -->
+            <div class="ios-dropdown-fix dropdown-menu-left">
+              <div class="p-2 border-b border-gray-200">
+                <button 
+                  class="flex items-center gap-2 w-full text-left"
+                  on:click|stopPropagation|preventDefault={toggleAllInterfaces}
+                >
+                  <div class="interface-checkbox {selectedInterfaces.length === totalActiveInterfaces ? 'checked' : ''}">
+                    {#if selectedInterfaces.length === totalActiveInterfaces}✓{/if}
+                  </div>
+                  <span>Select All ({totalActiveInterfaces})</span>
+                </button>
               </div>
               
-              <div class="max-h-[min(60vh,300px)] overflow-y-auto">
+              <div class="max-h-[60vh] overflow-y-auto p-1">
                 {#each getActiveInterfaces() as iface}
-                  <label class="cursor-pointer label justify-start gap-2 hover:bg-base-200 rounded py-2">
-                    <input 
-                      type="checkbox" 
-                      class="checkbox checkbox-sm checkbox-primary" 
-                      checked={selectedInterfaces.includes(iface.device)}
-                      on:change={() => toggleInterface(iface.device)}
-                    />
-                    <div class="flex flex-col">
-                      <span class="label-text font-medium">{iface.description || iface.device}</span>
-                      <div class="flex items-center gap-1">
-                        <span class="label-text text-xs opacity-70">{iface.device}</span>
-                        <span class="badge badge-xs {iface.status?.toLowerCase() === 'up' ? 'badge-success' : 'badge-error'}">{iface.status}</span>
-                        {#if iface.is_physical}
-                          <span class="badge badge-xs badge-primary">Physical</span>
-                        {:else}
-                          <span class="badge badge-xs badge-secondary">Virtual</span>
-                        {/if}
+                  <div class="border-b border-gray-100">
+                    <button 
+                      class="flex items-center gap-2 w-full text-left py-1.5 px-1"
+                      on:click|stopPropagation|preventDefault={() => toggleInterface(iface.device)}
+                    >
+                      <div class="interface-checkbox {selectedInterfaces.includes(iface.device) ? 'checked' : ''}">
+                        {#if selectedInterfaces.includes(iface.device)}✓{/if}
                       </div>
-                    </div>
-                    {#if selectedInterfaces.includes(iface.device)}
-                      <svg class="w-4 h-4 ml-auto text-success" viewBox="0 0 24 24">
-                        <path fill="currentColor" d={mdiEye} />
-                      </svg>
-                    {:else}
-                      <svg class="w-4 h-4 ml-auto text-error" viewBox="0 0 24 24">
-                        <path fill="currentColor" d={mdiEyeOff} />
-                      </svg>
-                    {/if}
-                  </label>
+                      <div>
+                        <div class="font-bold">{iface.description || iface.device}</div>
+                        <div class="text-sm">{iface.device}</div>
+                      </div>
+                    </button>
+                  </div>
                 {/each}
               </div>
             </div>
@@ -545,6 +610,94 @@
       width: calc(100vw - 1rem);
       max-width: 100%;
     }
+  }
+  
+  /* Improved mobile dropdown with better positioning */
+  .ios-dropdown-fix {
+    position: absolute !important; /* Changed from fixed to absolute for proper positioning */
+    top: 38px !important; /* Position directly below the button */
+    left: 0 !important; /* Align to left edge of interfaces button */
+    width: 240px !important;
+    z-index: 100000 !important;
+    
+    /* Completely solid background */
+    background-color: #FFFFFF !important;
+    
+    /* More subtle border */
+    border: 1px solid #cccccc !important;
+    border-radius: 6px !important;
+    
+    /* Lighter shadow */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+    
+    /* Fix scaling issues */
+    font-size: 14px !important;
+    transform: scale(0.95) !important;
+    transform-origin: top left !important; /* Changed from top right to top left */
+  }
+  
+  /* Dark mode version */
+  :global([data-theme="dark"]) .ios-dropdown-fix {
+    background-color: #1f2937 !important;
+    border-color: #4b5563 !important;
+    color: #e5e7eb !important;
+  }
+  
+  /* Custom checkbox replacement */
+  .interface-checkbox {
+    width: 18px !important;
+    height: 18px !important;
+    border: 1px solid #888888 !important;
+    border-radius: 3px !important;
+    background-color: #FFFFFF !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 12px !important;
+    color: #FFFFFF !important;
+    flex-shrink: 0 !important;
+  }
+  
+  .interface-checkbox.checked {
+    background-color: #3b82f6 !important;
+    border-color: #2563eb !important;
+  }
+  
+  /* Better UI for buttons */
+  .ios-dropdown-fix button {
+    padding: 6px !important;
+    border-radius: 4px !important;
+    transition: background-color 0.1s !important;
+  }
+  
+  .ios-dropdown-fix button:active {
+    background-color: rgba(0,0,0,0.05) !important;
+  }
+  
+  /* Fix sizing in dark mode */
+  :global([data-theme="dark"]) .ios-dropdown-fix button:active {
+    background-color: rgba(255,255,255,0.1) !important;
+  }
+  
+  /* Improved typography */
+  .ios-dropdown-fix span {
+    color: #333333 !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+  }
+  
+  .ios-dropdown-fix .font-bold {
+    font-weight: 500 !important;
+    font-size: 14px !important;
+  }
+  
+  .ios-dropdown-fix .text-sm {
+    font-size: 12px !important;
+    opacity: 0.8 !important;
+  }
+  
+  :global([data-theme="dark"]) .ios-dropdown-fix span {
+    color: #e5e7eb !important;
   }
   
   /* Improved dropdown styling for dark mode */
