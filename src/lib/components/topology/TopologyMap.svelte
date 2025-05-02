@@ -27,11 +27,9 @@
   import type { Interface, CombinedDevice } from "./types";
   import type { Node, Edge, NodeTypes } from '@xyflow/svelte';
   
-  // Import custom node components
-  import InterfaceNode from './InterfaceNode.svelte';
-  import DeviceNode from './DeviceNode.svelte';
-  import LightweightDeviceNode from './LightweightDeviceNode.svelte';
+  // Import lightweight node components as standard
   import LightweightInterfaceNode from './LightweightInterfaceNode.svelte';
+  import LightweightDeviceNode from './LightweightDeviceNode.svelte';
 
   export let interfaces: Interface[] = [];
   export let devices: CombinedDevice[] = [];
@@ -114,7 +112,7 @@
     (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
     (navigator.maxTouchPoints && navigator.maxTouchPoints > 2));
   
-  // Use lightweight components for better performance on all devices
+  // Use lightweight components for better performance on all platforms
   const nodeTypes = {
     interface: LightweightInterfaceNode,
     device: LightweightDeviceNode
@@ -128,26 +126,14 @@
     
     console.log('Preparing flow data with:', interfaces.length, 'interfaces,', devices.length, 'devices');
     
-    // Filter interfaces, handling CARP/HA setups better
+    // Filter out only system interfaces that aren't useful in the visualization
     const filteredInterfaces = interfaces.filter(iface => {
       // Skip certain system interfaces that aren't useful in the visualization
       if (iface.device === 'lo0' || iface.device === 'pfsync0') {
         return false;
       }
       
-      // Special handling for CARP interfaces in HA setups
-      const isCarpInterface = 
-        iface.device.includes('_vip') || 
-        iface.device.startsWith('carp') ||
-        (iface.description && iface.description.toLowerCase().includes('carp'));
-      
-      // Include CARP interfaces only if they're UP (they're the active interfaces in the HA pair)
-      if (isCarpInterface) {
-        return iface.status?.toLowerCase() === 'up';
-      }
-      
-      // For normal interfaces: include physical, virtual, and interfaces with identifiers
-      // Only filter out special system interfaces like lo0 and pfsync0 that we explicitly exclude above
+      // For all other interfaces: include physical, virtual, and interfaces with identifiers
       return true;
     });
     

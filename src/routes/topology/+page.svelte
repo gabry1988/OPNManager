@@ -29,16 +29,17 @@
     // Apply iOS specific fixes
     if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
       preventIOSInputScroll();
-      
-      // Add click handler for the entire document to help with iOS touch events
-      document.addEventListener('click', (e) => {
-        if (isFilterDropdownOpen && 
-            !e.target.closest('.dropdown-content') && 
-            !e.target.closest('button[on\\:click="toggleFilterDropdown"]')) {
-          isFilterDropdownOpen = false;
-        }
-      });
     }
+    
+    // Add click handler for the entire document to dismiss dropdown when clicking elsewhere
+    // This needs to be applied on all platforms, not just iOS
+    document.addEventListener('click', (e) => {
+      if (isFilterDropdownOpen && 
+          !e.target.closest('.dropdown-content') && 
+          !e.target.closest('#interfaces-dropdown-button')) {
+        isFilterDropdownOpen = false;
+      }
+    });
   });
 
   async function fetchData() {
