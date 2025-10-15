@@ -10,11 +10,15 @@ workflows:
       - echo "Cleaning node_modules..."
       - rm -rf node_modules package-lock.json
 
-      - echo "Installing Node dependencies (ignore optional)..."
+      - echo "Installing Node dependencies..."
       - npm install
 
       - echo "Building frontend..."
       - npm run build
+
+      - echo "Installing Rust..."
+      - curl https://sh.rustup.rs -sSf | sh -s -- -y
+      - export PATH="$HOME/.cargo/bin:$PATH"
 
       - echo "Installing Tauri CLI..."
       - cargo install tauri-cli --locked || true
