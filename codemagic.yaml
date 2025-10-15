@@ -6,67 +6,52 @@ workflows:
       vars:
         npm_config_optional: false
     scripts:
-      # 1️⃣ Pulizia ambiente
-      - echo "Cleaning node_modules..."
-      - rm -rf node_modules package-lock.json
+      - |
+        echo "Cleaning node_modules..."
+        rm -rf node_modules package-lock.json
 
-      # 2️⃣ Installa dipendenze Node
-      - echo "Installing Node dependencies..."
-      - npm install
+      - |
+        echo "Installing Node dependencies..."
+        npm install
 
-      # 3️⃣ Compila frontend (Vite/Svelte)
-      - echo "Building frontend..."
-      - npm run build
+      - |
+        echo "Building frontend..."
+        npm run build
 
-      # 4️⃣ Installa Rust + Tauri CLI
-      - bash -c "
-          echo 'Installing Rust...';
-          curl https://sh.rustup.rs -sSf | sh -s -- -y;
-          export PATH=\"$HOME/.cargo/bin:$PATH\";
-          cargo --version;
-          echo 'Installing Tauri CLI...';
-          cargo install tauri-cli --locked || true
-        "
+      - |
+        echo "Installing Rust and Tauri CLI..."
+        curl https://sh.rustup.rs -sSf | sh -s -- -y
+        export PATH="$HOME/.cargo/bin:$PATH"
+        cargo --version
+        cargo install tauri-cli --locked || true
 
-      # 5️⃣ Installa Android SDK/NDK/build-tools
-      - bash -c "
-          echo 'Installing Android SDK/NDK...';
-          mkdir -p \$HOME/android-sdk/cmdline-tools
-          curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip sdk-tools.zip -d \$HOME/android-sdk/cmdline-tools
-          # sposta cmdline-tools nella cartella 'latest' per avere il path corretto
-          mv \$HOME/android-sdk/cmdline-tools/cmdline-tools \$HOME/android-sdk/cmdline-tools/latest
+      - |
+        echo "Installing Android SDK/NDK/build-tools..."
+        mkdir -p $HOME/android-sdk/cmdline-tools
+        curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip sdk-tools.zip -d $HOME/android-sdk/cmdline-tools
+        mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+        yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
+        export ANDROID_SDK_ROOT=$HOME/android-sdk
+        export PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH
 
-          # accetta licenze e installa componenti necessari
-          yes | \$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-          \$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager 'platform-tools' 'platforms;android-33' 'build-tools;33.0.2' 'ndk;25.2.9519653'
+      - |
+        echo "Initializing Tauri Android project..."
+        npx tauri android init
 
-          export ANDROID_SDK_ROOT=\$HOME/android-sdk
-          export PATH=\$ANDROID_SDK_ROOT/platform-tools:\$PATH
-        "
+      - |
+        echo "Creating debug keystore..."
+        mkdir -p android/debug
+        keytool -genkeypair -v -keystore android/debug/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Debug, OU=Dev, O=Dev, L=City, S=State, C=US"
 
-      # 6️⃣ Inizializza progetto Android Tauri
-      - bash -c "
-          echo 'Initializing Tauri Android project...';
-          npx tauri android init
-        "
-
-      # 7️⃣ Crea keystore debug
-      - bash -c "
-          echo 'Creating debug keystore...';
-          mkdir -p android/debug;
-          keytool -genkeypair -v -keystore android/debug/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Debug, OU=Dev, O=Dev, L=City, S=State, C=US'
-        "
-
-      # 8️⃣ Compila APK debug firmato
-      - bash -c "
-          echo 'Building Android debug APK...';
-          cargo tauri android build --debug -- \
-            --signing-key android/debug/debug.keystore \
-            --alias androiddebugkey \
-            --storepass android \
-            --keypass android
-        "
+      - |
+        echo "Building Android debug APK..."
+        cargo tauri android build --debug -- \
+          --signing-key android/debug/debug.keystore \
+          --alias androiddebugkey \
+          --storepass android \
+          --keypass android
 
     artifacts:
       - "**/app-debug.apk"
