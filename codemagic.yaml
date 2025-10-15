@@ -38,13 +38,14 @@ workflows:
 
       - |
         echo "Initializing Tauri Android project if needed..."
-        cd $CM_BUILD_DIR
-        if [ ! -d "src-tauri/gen/android" ]; then
+        cd $CM_BUILD_DIR/src-tauri
+        if [ ! -d "gen/android" ]; then
           npx tauri android init
         fi
 
       - |
         echo "Creating debug keystore..."
+        cd $CM_BUILD_DIR
         mkdir -p android/debug
         keytool -genkeypair -v -keystore android/debug/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Debug, OU=Dev, O=Dev, L=City, S=State, C=US"
 
