@@ -3,8 +3,8 @@ workflows:
     name: Build OPNManager Android v3.1.2 (Debug)
     max_build_duration: 120
     environment:
+      image: ubuntu-22.04-android  # Immagine con Android SDK, NDK e build tools preinstallati
       vars:
-        ANDROID_SDK_ROOT: /opt/android-sdk
         npm_config_optional: false
     scripts:
       # 1️⃣ Pulizia ambiente
