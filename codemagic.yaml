@@ -1,7 +1,7 @@
 workflows:
   build_opnmanager_android:
     name: Build OPNManager Android v3.1.2 (Debug)
-    max_build_duration: 180
+    max_build_duration: 120
     environment:
       vars:
         npm_config_optional: false
