@@ -5,12 +5,13 @@ workflows:
     environment:
       vars:
         ANDROID_SDK_ROOT: /opt/android-sdk
+        npm_config_optional: false
     scripts:
       - echo "Cleaning node_modules..."
       - rm -rf node_modules package-lock.json
 
-      - echo "Installing Node dependencies..."
-      - npm install --omit=optional
+      - echo "Installing Node dependencies (ignore optional)..."
+      - npm install
 
       - echo "Building frontend..."
       - npm run build
