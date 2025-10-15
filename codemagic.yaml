@@ -37,8 +37,11 @@ workflows:
         export PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH
 
       - |
-        echo "Initializing Tauri Android project..."
-        npx tauri android init
+        echo "Initializing Tauri Android project if needed..."
+        cd $CM_BUILD_DIR
+        if [ ! -d "src-tauri/gen/android" ]; then
+          npx tauri android init
+        fi
 
       - |
         echo "Creating debug keystore..."
@@ -47,6 +50,7 @@ workflows:
 
       - |
         echo "Building Android debug APK..."
+        cd $CM_BUILD_DIR
         cargo tauri android build --debug -- \
           --signing-key android/debug/debug.keystore \
           --alias androiddebugkey \
