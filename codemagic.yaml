@@ -1,0 +1,38 @@
+workflows:
+  build_opnmanager_android:
+    name: Build OPNManager Android (v3.1.2)
+    max_build_duration: 60
+    environment:
+      vars:
+        ANDROID_SDK_ROOT: /opt/android-sdk
+      node: latest
+      rust: stable
+      cargo_cache: true
+    scripts:
+      # 1️⃣ Installa le dipendenze Node
+      - echo "Installing Node dependencies..."
+      - npm install
+
+      # 2️⃣ Compila la parte web (SvelteKit)
+      - echo "Building frontend..."
+      - npm run build
+
+      # 3️⃣ Installa la CLI di Tauri
+      - echo "Installing Tauri CLI..."
+      - cargo install tauri-cli --locked || true
+
+      # 4️⃣ Costruisci l'app Android (release mode)
+      - echo "Building Android APK..."
+      - cargo tauri android build --release
+
+    artifacts:
+      - "**/app-release.apk"
+      - "**/app-universal-release.aab"
+
+    publishing:
+      email:
+        recipients:
+          - your@email.com
+        notify:
+          success: true
+          failure: true
