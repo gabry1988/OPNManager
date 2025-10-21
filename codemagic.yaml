@@ -19,8 +19,9 @@ workflows:
         npm run build
 
       - |
-        echo "Installing Rust and Tauri CLI..."
+        echo "Installing Rust and Tauri CLI (globally)..."
         curl https://sh.rustup.rs -sSf | sh -s -- -y
+        source $HOME/.cargo/env
         export PATH="$HOME/.cargo/bin:$PATH"
         cargo --version
         cargo install tauri-cli --locked || true
@@ -37,8 +38,15 @@ workflows:
         export PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH
 
       - |
-        echo "Initializing Tauri Android project if needed..."
+        echo "Initializing Tauri Android project in src-tauri..."
+        source $HOME/.cargo/env
+        export PATH="$HOME/.cargo/bin:$PATH"
         cd $CM_BUILD_DIR/src-tauri
+        ls -l Cargo.toml
+        if [ ! -f "Cargo.toml" ]; then
+          echo "❌ Cargo.toml not found in src-tauri. Stopping build."
+          exit 1
+        fi
         if [ ! -d "gen/android" ]; then
           npx tauri android init
         fi
@@ -51,6 +59,8 @@ workflows:
 
       - |
         echo "Building Android debug APK..."
+        source $HOME/.cargo/env
+        export PATH="$HOME/.cargo/bin:$PATH"
         cd $CM_BUILD_DIR
         cargo tauri android build --debug -- \
           --signing-key android/debug/debug.keystore \
