@@ -97,6 +97,107 @@ jobs:
   # -----------------------------------------
   build-frontend:
     runs-on: ubuntu-22.04
+name: Build Android APK (Optimized Fast)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
+  TAURI_SKIP_DEVSERVER: true
+  CARGO_TERM_COLOR: always
+  PATH: $PATH:/home/runner/.cargo/bin
+
+jobs:
+
+  # -----------------------------------------
+  # 🧰 SETUP
+  # -----------------------------------------
+  setup:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ✅ Install tar before checkout
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tar
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-node-
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust Android targets
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi
+
+      - name: Install Tauri CLI
+        run: |
+          cargo install tauri-cli --locked
+          cargo tauri --version
+
+      - name: Cache Android SDK & NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: ${{ runner.os }}-android-sdk-v2
+
+      - name: Install Android SDK cmdline-tools if not cached
+        run: |
+          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+            cd $ANDROID_SDK_ROOT/cmdline-tools
+            curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
+            unzip cmdline-tools.zip
+            mv cmdline-tools latest
+            rm cmdline-tools.zip
+          fi
+          echo "PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_ENV
+
+      - name: Install Android SDK & NDK components
+        run: |
+          if [ ! -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ]; then
+            yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+            sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+          else
+            echo "✅ Android SDK & NDK already installed. Skipping."
+          fi
+
+  # -----------------------------------------
+  # 🧪 BUILD FRONTEND
+  # -----------------------------------------
+  build-frontend:
+    runs-on: ubuntu-22.04
     needs: setup
     steps:
       - uses: actions/checkout@v4
