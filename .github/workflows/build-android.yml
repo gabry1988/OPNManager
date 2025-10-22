@@ -56,7 +56,7 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
 
-      # 👇 FIX: Installazione cmdline-tools
+      # 👇 Installazione cmdline-tools
       - name: Install Android SDK cmdline-tools
         run: |
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
@@ -87,7 +87,7 @@ jobs:
           name: opnmanager-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
 
-      # 🪙 Genera chiave per la build Release (solo se non esiste)
+      # 🪙 Genera chiave per release
       - name: Generate release keystore
         run: |
           keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
@@ -104,9 +104,18 @@ jobs:
             --storepass android \
             --keypass android
 
-      # 📤 Upload release APK firmata
+      # 📤 Upload Release APK come artifact
       - name: Upload Release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: opnmanager-release-apk
           path: src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+
+      # 🚀 Crea/aggiorna la release su GitHub
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
