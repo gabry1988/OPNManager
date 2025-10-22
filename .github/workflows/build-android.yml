@@ -12,7 +12,7 @@ env:
   NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
   TAURI_SKIP_DEVSERVER: true
   CARGO_TERM_COLOR: always
-  PATH: ${{ env.PATH }}:/home/runner/.cargo/bin
+  PATH: $PATH:/home/runner/.cargo/bin
 
 jobs:
 
