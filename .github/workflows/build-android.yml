@@ -15,19 +15,20 @@ env:
   PATH: $PATH:/home/runner/.cargo/bin
 
 jobs:
-
   # -----------------------------------------
   # 🧰 SETUP
   # -----------------------------------------
   setup:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
-      - name: ✅ Ensure git is installed
+      - name: 🧰 Ensure git and tar are installed
         run: |
           sudo apt-get update
-          sudo apt-get install -y git
+          sudo apt-get install -y git tar
+          git --version
+          tar --version
 
-      - name: Checkout
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -100,7 +101,7 @@ jobs:
   # 🧪 BUILD FRONTEND
   # -----------------------------------------
   build-frontend:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: setup
     steps:
       - uses: actions/checkout@v4
@@ -120,7 +121,7 @@ jobs:
   # 📱 BUILD DEBUG
   # -----------------------------------------
   build-debug:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
       - uses: actions/checkout@v4
@@ -139,12 +140,7 @@ jobs:
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
           rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
-
-          if ! command -v cargo-tauri &> /dev/null; then
-            cargo install tauri-cli --locked
-          fi
-          cargo tauri --version
-
+          command -v cargo-tauri || (echo "❌ cargo-tauri not found" && exit 1)
           [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
           [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
           [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
@@ -173,7 +169,7 @@ jobs:
   # 🔐 BUILD RELEASE
   # -----------------------------------------
   build-release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
       - uses: actions/checkout@v4
@@ -192,12 +188,7 @@ jobs:
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
           rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
-
-          if ! command -v cargo-tauri &> /dev/null; then
-            cargo install tauri-cli --locked
-          fi
-          cargo tauri --version
-
+          command -v cargo-tauri || (echo "❌ cargo-tauri not found" && exit 1)
           [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
           [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
           [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
