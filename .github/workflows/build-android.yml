@@ -1,4 +1,4 @@
-name: Build Android APK (Optimized Fast)
+name: Build Android APK (Optimized Clean)
 
 on:
   push:
@@ -12,7 +12,6 @@ env:
   NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
   TAURI_SKIP_DEVSERVER: true
   CARGO_TERM_COLOR: always
-  PATH: $PATH:/home/runner/.cargo/bin
 
 jobs:
   # -----------------------------------------
@@ -21,7 +20,7 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - name: 🧰 Install Git & Tar
+      - name: 🧰 Install Git & Tar (before checkout)
         run: |
           sudo apt-get update
           sudo apt-get install -y git tar
@@ -65,6 +64,9 @@ jobs:
         run: |
           rustup target add aarch64-linux-android armv7-linux-androideabi
 
+      - name: Add cargo bin to PATH (job)
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Install Tauri CLI
         run: |
           cargo install tauri-cli --locked
@@ -76,21 +78,22 @@ jobs:
           path: /usr/local/lib/android/sdk
           key: ${{ runner.os }}-android-sdk-v2
 
-      - name: Install Android SDK cmdline-tools if not cached
+      - name: Install Android cmdline-tools (if needed)
         run: |
           if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-            cd $ANDROID_SDK_ROOT/cmdline-tools
+            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+            cd "$ANDROID_SDK_ROOT/cmdline-tools"
             curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
-            unzip cmdline-tools.zip
+            unzip -q cmdline-tools.zip
             mv cmdline-tools latest
             rm cmdline-tools.zip
           fi
-          echo "PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_ENV
+          # aggiungi i bin al PATH di questo job (senza riscrivere PATH globale)
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
       - name: Install Android SDK & NDK components
         run: |
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
   # -----------------------------------------
@@ -100,11 +103,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     steps:
-      - name: 🧰 Install Git & Tar
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git tar
-
       - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
@@ -131,11 +129,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
-      - name: 🧰 Install Git & Tar
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git tar
-
       - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
@@ -149,6 +142,20 @@ jobs:
             ~/.cargo/git
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Add cargo bin to PATH (job)
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: 🧪 Precheck Environment
+        run: |
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
+          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
+          command -v cargo-tauri >/dev/null || (echo "❌ cargo-tauri not found" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
+          echo "✅ Precheck passed."
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
@@ -174,11 +181,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
-      - name: 🧰 Install Git & Tar
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git tar
-
       - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
@@ -192,6 +194,20 @@ jobs:
             ~/.cargo/git
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Add cargo bin to PATH (job)
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: 🧪 Precheck Environment
+        run: |
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
+          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
+          command -v cargo-tauri >/dev/null || (echo "❌ cargo-tauri not found" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
+          echo "✅ Precheck passed."
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
