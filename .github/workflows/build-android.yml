@@ -3,8 +3,8 @@ name: Build Android APK
 on:
   push:
     tags:
-      - 'v*'          # build automatica quando crei un nuovo tag v1.0.0 ecc.
-  workflow_dispatch:  # possibilità di lanciarlo manualmente
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,6 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Cache per Rust
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -30,6 +31,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      # Cache per Node.js
       - name: Cache node modules
         uses: actions/cache@v4
         with:
@@ -56,6 +58,18 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
 
+      # 👇 FIX: Installazione cmdline-tools per abilitare sdkmanager
+      - name: Install Android SDK cmdline-tools
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
+          unzip cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          echo "PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_ENV
+
+      # Installazione SDK, build tools e NDK
       - name: Install Android SDK & NDK
         run: |
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
