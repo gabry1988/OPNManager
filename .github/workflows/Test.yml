@@ -1,0 +1,12 @@
+name: SANITY PATH
+on: workflow_dispatch
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print PATH and tool locations
+        run: |
+          echo "PATH=$PATH"
+          which tar || echo "tar NOT FOUND"
+          which git || echo "git NOT FOUND"
+          env | sort | sed -n '1,120p'
