@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   push:
     tags:
-      - 'v*'   # parte automaticamente quando fai un tag tipo v3.1.2
+      - 'v*'   # parte in automatico quando crei un tag es. v3.1.2
 
 jobs:
   build:
@@ -40,12 +40,16 @@ jobs:
           npm install
           npm run build
 
-      - name: Init Tauri Android
+      - name: Init Tauri Android (if needed)
         run: |
           cd src-tauri
           if [ ! -d "gen/android" ]; then
-            npx tauri android init
+            echo "⚡ Inizializzo progetto Android per Tauri..."
+            npx tauri android init || { echo "❌ tauri android init fallito"; exit 1; }
+          else
+            echo "✅ Progetto Android già inizializzato"
           fi
+          ls -l gen
 
       - name: Generate debug keystore
         run: |
