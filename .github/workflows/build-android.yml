@@ -1,84 +1,235 @@
-name: ANDROID – NO ACTIONS – DEBUG ONLY
+name: Build Android APK (Optimized Fast)
 
 on:
-  workflow_dispatch: {}
-
-permissions:
-  contents: write
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 env:
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
   ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
   NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
   TAURI_SKIP_DEVSERVER: true
   CARGO_TERM_COLOR: always
-  DEBIAN_FRONTEND: noninteractive
 
 jobs:
-  build-debug:
+  # -----------------------------------------
+  # 🧰 SETUP
+  # -----------------------------------------
+  setup:
     runs-on: ubuntu-latest
     steps:
-      - name: 🧰 System deps
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y git tar curl unzip zip xz-utils build-essential pkg-config openjdk-17-jdk
-          which tar && tar --version
-          which git && git --version
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: 📥 Clone repo (manuale)
-        run: |
-          set -euxo pipefail
-          git clone "https://github.com/${GITHUB_REPOSITORY}.git" .
-          git fetch --all --tags --force
-          git checkout -f "${GITHUB_SHA}"
-          git submodule update --init --recursive || true
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-node-
 
-      - name: 🟩 Node 20 + build frontend
-        run: |
-          set -euxo pipefail
-          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-          sudo apt-get install -y nodejs
-          node -v && npm -v
-          npm ci
-          npm run build || true
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: 🦀 Rust & Tauri CLI
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add cargo bin to PATH (job)
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Rust Android targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi
+
+      - name: Install Tauri CLI
         run: |
-          set -euxo pipefail
-          curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          source "$HOME/.cargo/env"
-          rustup target add aarch64-linux-android armv7-linux-androideabi
           cargo install tauri-cli --locked
           cargo tauri --version
 
-      - name: 🤖 Android SDK/NDK (non-interactive + licenses)
+      - name: Cache Android SDK & NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: ${{ runner.os }}-android-sdk-v2
+
+      - name: Install Android SDK cmdline-tools if not cached
         run: |
-          set -euxo pipefail
-          sudo mkdir -p "$ANDROID_SDK_ROOT"
-          sudo chown -R "$USER:$USER" "$ANDROID_SDK_ROOT"
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          cd "$ANDROID_SDK_ROOT/cmdline-tools"
-          if [ ! -d "latest" ]; then
+          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+            cd "$ANDROID_SDK_ROOT/cmdline-tools"
             curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
             unzip -q cmdline-tools.zip
             mv cmdline-tools latest
             rm cmdline-tools.zip
           fi
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          mkdir -p "$ANDROID_SDK_ROOT/licenses"
-          printf "%s\n" "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
-          printf "%s\n" "84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
-            "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-      - name: 🧪 Build Debug APK
+      - name: Install Android SDK & NDK components
         run: |
-          set -euxo pipefail
-          source "$HOME/.cargo/env"
+          if [ ! -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ]; then
+            yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
+            sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+          else
+            echo "✅ Android SDK & NDK already installed. Skipping."
+          fi
+
+  # -----------------------------------------
+  # 🧪 BUILD FRONTEND
+  # -----------------------------------------
+  build-frontend:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+      - name: Build frontend
+        run: npm run build
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: build
+
+  # -----------------------------------------
+  # 📱 BUILD DEBUG
+  # -----------------------------------------
+  build-debug:
+    runs-on: ubuntu-latest
+    needs: [setup, build-frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Add cargo bin to PATH (job)
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Precheck Environment
+        run: |
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
+          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
+          command -v cargo-tauri >/dev/null || (echo "❌ cargo-tauri not found" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
+          echo "✅ Precheck passed."
+
+      - name: Download frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: build
+
+      - name: Build Android Debug
+        run: |
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo tauri android build --debug
-          echo "Debug APK(s):"
-          find src-tauri/gen/android/app/build/outputs/apk/debug -maxdepth 1 -name "*.apk" -type f || true
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: opnmanager-debug-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
+
+  # -----------------------------------------
+  # 🔐 BUILD RELEASE
+  # -----------------------------------------
+  build-release:
+    runs-on: ubuntu-latest
+    needs: [setup, build-frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Add cargo bin to PATH (job)
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Precheck Environment
+        run: |
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
+          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
+          command -v cargo-tauri >/dev/null || (echo "❌ cargo-tauri not found" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
+          echo "✅ Precheck passed."
+
+      - name: Download frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: build
+
+      - name: Generate release keystore
+        run: |
+          keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
+            -alias opnmanager
+
+      - name: Build Android Release
+        run: |
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          cargo tauri android build --release -- \
+            --signing-key release-key.jks \
+            --alias opnmanager \
+            --storepass android \
+            --keypass android
+
+      - name: Rename APK
+        run: |
+          TAG_NAME=${GITHUB_REF_NAME}
+          APK_DIR="src-tauri/gen/android/app/build/outputs/apk/release"
+          APK_FILE=$(ls "$APK_DIR"/*.apk | head -n 1)
+          NEW_NAME="OPNManager-${TAG_NAME}-release.apk"
+          mv "$APK_FILE" "$APK_DIR/$NEW_NAME"
+          echo "RENAMED_APK=$APK_DIR/$NEW_NAME" >> $GITHUB_ENV
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: opnmanager-release-apk
+          path: ${{ env.RENAMED_APK }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.RENAMED_APK }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
