@@ -3,79 +3,68 @@ name: Build Android APK
 on:
   push:
     tags:
-      - 'v*'  # Esegue la build quando crei un nuovo tag tipo v1.0.0
+      - 'v*'          # build automatica quando crei un nuovo tag v1.0.0 ecc.
+  workflow_dispatch:  # possibilità di lanciarlo manualmente
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
+      TAURI_SKIP_DEVSERVER: true
 
-      # 🦀 Cache Rust / Cargo
-      - name: Cache Cargo
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache cargo
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo
-            target
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # 📦 Cache NPM (per evitare reinstallazioni)
-      - name: Cache node_modules
+      - name: Cache node modules
         uses: actions/cache@v4
         with:
-          path: src-tauri/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('src-tauri/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-npm-
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-node-
 
-      # 🤖 Cache Android SDK
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: $HOME/android-sdk
-          key: ${{ runner.os }}-androidsdk
-
-      # 🧰 Cache Gradle
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle
-          key: ${{ runner.os }}-gradle
-
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Setup Rust & Tauri CLI
+      - name: Install npm dependencies
         run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          source $HOME/.cargo/env
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          cargo install tauri-cli --locked || true
+          npm ci
 
-      - name: Install Android SDK (if not cached)
+      - name: Build frontend
         run: |
-          if [ ! -d "$HOME/android-sdk" ]; then
-            mkdir -p $HOME/android-sdk/cmdline-tools
-            curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-            unzip -q sdk-tools.zip -d $HOME/android-sdk/cmdline-tools
-            mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
-            yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-            $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
-          fi
+          npm run build
 
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "NDK_HOME=$HOME/android-sdk/ndk/25.2.9519653" >> $GITHUB_ENV
-          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
+
+      - name: Install Android SDK & NDK
+        run: |
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
       - name: Make gradlew executable
         run: chmod +x src-tauri/gen/android/gradlew
 
-      - name: Build APK
+      - name: Build Android APK (Debug)
         run: |
           source $HOME/.cargo/env
           cargo tauri android build --debug
@@ -83,5 +72,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OPNManager-debug-apk
+          name: opnmanager-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
