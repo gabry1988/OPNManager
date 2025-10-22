@@ -17,7 +17,7 @@ env:
 jobs:
 
   # -----------------------------------------
-  # 🧰 SETUP AMBIENTE
+  # 🧰 SETUP
   # -----------------------------------------
   setup:
     runs-on: ubuntu-latest
@@ -130,8 +130,11 @@ jobs:
 
       - name: Ensure Tauri CLI is installed
         run: |
-          source $HOME/.cargo/env
+          if [ -f ~/.cargo/env ]; then
+            source ~/.cargo/env
+          fi
           if ! command -v cargo-tauri &> /dev/null; then
+            echo "Installing cargo-tauri..."
             cargo install tauri-cli --locked
           fi
           cargo tauri --version
@@ -144,7 +147,9 @@ jobs:
 
       - name: Build Android Debug
         run: |
-          source $HOME/.cargo/env
+          if [ -f ~/.cargo/env ]; then
+            source ~/.cargo/env
+          fi
           cargo tauri android build --debug
 
       - name: Upload Debug APK
@@ -173,8 +178,11 @@ jobs:
 
       - name: Ensure Tauri CLI is installed
         run: |
-          source $HOME/.cargo/env
+          if [ -f ~/.cargo/env ]; then
+            source ~/.cargo/env
+          fi
           if ! command -v cargo-tauri &> /dev/null; then
+            echo "Installing cargo-tauri..."
             cargo install tauri-cli --locked
           fi
           cargo tauri --version
@@ -193,7 +201,9 @@ jobs:
 
       - name: Build Android Release
         run: |
-          source $HOME/.cargo/env
+          if [ -f ~/.cargo/env ]; then
+            source ~/.cargo/env
+          fi
           cargo tauri android build --release -- \
             --signing-key release-key.jks \
             --alias opnmanager \
