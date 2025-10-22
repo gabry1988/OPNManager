@@ -128,16 +128,25 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Ensure Tauri CLI is installed
+      - name: 🧪 Precheck Environment
         run: |
-          if [ -f ~/.cargo/env ]; then
-            source ~/.cargo/env
-          fi
+          echo "🔍 Checking Rust env..."
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
+          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
+
+          echo "🔍 Checking Tauri CLI..."
           if ! command -v cargo-tauri &> /dev/null; then
             echo "Installing cargo-tauri..."
             cargo install tauri-cli --locked
           fi
           cargo tauri --version
+
+          echo "🔍 Checking Android SDK..."
+          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
+          echo "✅ Precheck passed."
 
       - name: Download frontend
         uses: actions/download-artifact@v4
@@ -176,16 +185,25 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Ensure Tauri CLI is installed
+      - name: 🧪 Precheck Environment
         run: |
-          if [ -f ~/.cargo/env ]; then
-            source ~/.cargo/env
-          fi
+          echo "🔍 Checking Rust env..."
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
+          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
+
+          echo "🔍 Checking Tauri CLI..."
           if ! command -v cargo-tauri &> /dev/null; then
             echo "Installing cargo-tauri..."
             cargo install tauri-cli --locked
           fi
           cargo tauri --version
+
+          echo "🔍 Checking Android SDK..."
+          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
+          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
+          echo "✅ Precheck passed."
 
       - name: Download frontend
         uses: actions/download-artifact@v4
