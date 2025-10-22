@@ -1,4 +1,4 @@
-name: Build Android APK (Optimized Fast)
+name: Build Android APK (Optimized Fast - Manual Checkout)
 
 on:
   push:
@@ -21,17 +21,18 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - name: 🧰 Ensure git and tar are installed
+      - name: 🧰 Install git and tar
         run: |
           sudo apt-get update
           sudo apt-get install -y git tar
           git --version
           tar --version
 
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: 📥 Manual checkout
+        run: |
+          git clone https://github.com/${{ github.repository }} .
+          git fetch --tags
+          git checkout ${{ github.ref_name }}
 
       - name: Cache node_modules
         uses: actions/cache@v4
@@ -104,13 +105,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Manual checkout
+        run: |
+          git clone https://github.com/${{ github.repository }} .
+          git fetch --tags
+          git checkout ${{ github.ref_name }}
+
       - uses: actions/cache@v4
         with:
           path: node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+
       - name: Build frontend
         run: npm run build
+
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
@@ -124,7 +132,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Manual checkout
+        run: |
+          git clone https://github.com/${{ github.repository }} .
+          git fetch --tags
+          git checkout ${{ github.ref_name }}
 
       - name: Restore Cargo cache
         uses: actions/cache@v4
@@ -172,7 +184,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Manual checkout
+        run: |
+          git clone https://github.com/${{ github.repository }} .
+          git fetch --tags
+          git checkout ${{ github.ref_name }}
 
       - name: Restore Cargo cache
         uses: actions/cache@v4
