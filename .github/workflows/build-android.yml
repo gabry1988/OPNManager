@@ -1,12 +1,10 @@
-name: Build Android APK (Zero Uses, Split Jobs)
+name: ANDROID – NO ACTIONS – DEBUG ONLY
 
 on:
-  push:
-    tags: ['v*']          # release su tag vX.Y.Z
-  workflow_dispatch: {}   # avvio manuale
+  workflow_dispatch: {}
 
 permissions:
-  contents: write         # necessario per pubblicare release con gh
+  contents: write
 
 env:
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -16,24 +14,7 @@ env:
   CARGO_TERM_COLOR: always
   DEBIAN_FRONTEND: noninteractive
 
-# ---------------------------
-# 0) SANITY (facoltativo)
-# ---------------------------
 jobs:
-  sanity:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🔎 PATH & tools
-        run: |
-          set -euxo pipefail
-          echo "PATH=$PATH"
-          which tar || echo "tar NOT FOUND"
-          which git || echo "git NOT FOUND"
-          uname -a
-
-  # -----------------------------------------
-  # 1) BUILD DEBUG  (job indipendente)
-  # -----------------------------------------
   build-debug:
     runs-on: ubuntu-latest
     steps:
@@ -42,20 +23,15 @@ jobs:
           set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y git tar curl unzip zip xz-utils build-essential pkg-config openjdk-17-jdk
-          git --version
-          tar --version
-          java -version
+          which tar && tar --version
+          which git && git --version
 
-      - name: 📥 Clone repo (manuale, niente actions/checkout)
+      - name: 📥 Clone repo (manuale)
         run: |
           set -euxo pipefail
           git clone "https://github.com/${GITHUB_REPOSITORY}.git" .
           git fetch --all --tags --force
-          if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
-            git checkout -f "${GITHUB_REF_NAME}"
-          else
-            git checkout -f "${GITHUB_SHA}"
-          fi
+          git checkout -f "${GITHUB_SHA}"
           git submodule update --init --recursive || true
 
       - name: 🟩 Node 20 + build frontend
@@ -65,7 +41,7 @@ jobs:
           sudo apt-get install -y nodejs
           node -v && npm -v
           npm ci
-          npm run build || true  # opzionale: tauri lo rifà comunque
+          npm run build || true
 
       - name: 🦀 Rust & Tauri CLI
         run: |
@@ -77,7 +53,7 @@ jobs:
           cargo install tauri-cli --locked
           cargo tauri --version
 
-      - name: 🤖 Android SDK/NDK (licenze non-interattive)
+      - name: 🤖 Android SDK/NDK (non-interactive + licenses)
         run: |
           set -euxo pipefail
           sudo mkdir -p "$ANDROID_SDK_ROOT"
@@ -106,98 +82,3 @@ jobs:
           cargo tauri android build --debug
           echo "Debug APK(s):"
           find src-tauri/gen/android/app/build/outputs/apk/debug -maxdepth 1 -name "*.apk" -type f || true
-
-  # -----------------------------------------
-  # 2) BUILD RELEASE (job indipendente, solo su tag)
-  # -----------------------------------------
-  build-release:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: 🧰 System deps + gh
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y git tar curl unzip zip xz-utils build-essential pkg-config openjdk-17-jdk
-          type -p gh >/dev/null || {
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update && sudo apt-get install -y gh
-          }
-
-      - name: 📥 Clone repo (manuale)
-        run: |
-          set -euxo pipefail
-          git clone "https://github.com/${GITHUB_REPOSITORY}.git" .
-          git fetch --all --tags --force
-          git checkout -f "${GITHUB_REF_NAME}"
-          git submodule update --init --recursive || true
-
-      - name: 🟩 Node 20 + build frontend
-        run: |
-          set -euxo pipefail
-          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-          sudo apt-get install -y nodejs
-          node -v && npm -v
-          npm ci
-          npm run build || true
-
-      - name: 🦀 Rust & Tauri CLI
-        run: |
-          set -euxo pipefail
-          curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          source "$HOME/.cargo/env"
-          rustup target add aarch64-linux-android armv7-linux-androideabi
-          cargo install tauri-cli --locked
-          cargo tauri --version
-
-      - name: 🤖 Android SDK/NDK (licenze non-interattive)
-        run: |
-          set -euxo pipefail
-          sudo mkdir -p "$ANDROID_SDK_ROOT"
-          sudo chown -R "$USER:$USER" "$ANDROID_SDK_ROOT"
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          cd "$ANDROID_SDK_ROOT/cmdline-tools"
-          if [ ! -d "latest" ]; then
-            curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
-            unzip -q cmdline-tools.zip
-            mv cmdline-tools latest
-            rm cmdline-tools.zip
-          fi
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          mkdir -p "$ANDROID_SDK_ROOT/licenses"
-          printf "%s\n" "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
-          printf "%s\n" "84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
-            "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
-
-      - name: 🔐 Build Release APK (signed) + upload su Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euxo pipefail
-          source "$HOME/.cargo/env"
-          keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
-            -alias opnmanager
-          cargo tauri android build --release -- \
-            --signing-key release-key.jks \
-            --alias opnmanager \
-            --storepass android \
-            --keypass android
-          APK_DIR="src-tauri/gen/android/app/build/outputs/apk/release"
-          APK_FILE=$(ls "$APK_DIR"/*.apk | head -n 1)
-          NEW_NAME="OPNManager-${GITHUB_REF_NAME}-release.apk"
-          mv "$APK_FILE" "$APK_DIR/$NEW_NAME"
-          echo "APK_RELEASE=$APK_DIR/$NEW_NAME"
-          # pubblica su GitHub Release (crea o aggiorna)
-          if ! gh release view "${GITHUB_REF_NAME}"; then
-            gh release create "${GITHUB_REF_NAME}" "$APK_DIR/$NEW_NAME" --title "OPNManager ${GITHUB_REF_NAME}" --notes "Automated Android release"
-          else
-            gh release upload "${GITHUB_REF_NAME}" "$APK_DIR/$NEW_NAME" --clobber
-          fi
-          echo "✅ Uploaded: $APK_DIR/$NEW_NAME"
