@@ -1,34 +1,40 @@
 {
-  "productName": "OPNManager",
-  "version": "3.1.2",
-  "identifier": "com.OPNManager.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
-    "frontendDist": "../build"
+    "beforeDevCommand": "npm run dev",
+    "devPath": "http://localhost:5173",
+    "distDir": "../dist"
   },
-  "app": {
+  "package": {
+    "productName": "OPNManager",
+    "version": "3.1.2"
+  },
+  "tauri": {
+    "bundle": {
+      "active": true,
+      "identifier": "com.opnmanager.mobile",
+      "icon": [
+        "icons/icon.png",
+        "icons/icon.ico"
+      ],
+      "android": {
+        "package": "com.opnmanager.mobile",
+        "minSdkVersion": 24,
+        "targetSdkVersion": 34
+      }
+    },
+    "updater": {
+      "active": false
+    },
+    "allowlist": {
+      "all": true
+    },
     "windows": [
       {
         "title": "OPNManager",
         "width": 800,
         "height": 600
       }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
     ]
   }
 }
