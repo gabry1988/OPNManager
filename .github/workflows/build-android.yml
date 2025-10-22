@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK (Optimized)
 
 on:
   push:
@@ -15,12 +15,19 @@ jobs:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
       TAURI_SKIP_DEVSERVER: true
+      CARGO_TERM_COLOR: always
 
     steps:
+      # ---------------------
+      # 📥 Checkout
+      # ---------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cache cargo
+      # ---------------------
+      # 🦀 Cache Rust
+      # ---------------------
+      - name: Cache cargo & target
         uses: actions/cache@v4
         with:
           path: |
@@ -30,6 +37,9 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      # ---------------------
+      # 📦 Cache Node modules
+      # ---------------------
       - name: Cache node modules
         uses: actions/cache@v4
         with:
@@ -48,27 +58,59 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      # ---------------------
+      # 🧰 Cache Tauri CLI
+      # ---------------------
+      - name: Cache Tauri CLI
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-tauri-cli-v2
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked
-
-      - name: Install Android SDK cmdline-tools
+      - name: Install Tauri CLI if not cached
         run: |
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          cd $ANDROID_SDK_ROOT/cmdline-tools
-          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
-          unzip cmdline-tools.zip
-          mv cmdline-tools latest
-          rm cmdline-tools.zip
+          if [ ! -f ~/.cargo/bin/cargo-tauri ]; then
+            echo "Installing Tauri CLI..."
+            cargo install tauri-cli --locked
+          else
+            echo "✅ Tauri CLI già in cache"
+          fi
+
+      # ---------------------
+      # 🤖 Cache Android SDK
+      # ---------------------
+      - name: Cache Android SDK & NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: ${{ runner.os }}-android-sdk-v2
+
+      - name: Install Android SDK cmdline-tools if not cached
+        run: |
+          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            echo "📥 Installing Android cmdline-tools..."
+            mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+            cd $ANDROID_SDK_ROOT/cmdline-tools
+            curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
+            unzip cmdline-tools.zip
+            mv cmdline-tools latest
+            rm cmdline-tools.zip
+          else
+            echo "✅ Android SDK già in cache"
+          fi
           echo "PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_ENV
 
-      - name: Install Android SDK & NDK
+      - name: Install Android SDK & NDK components
         run: |
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
+      # ---------------------
+      # 🧱 Build
+      # ---------------------
       - name: Make gradlew executable
         run: chmod +x src-tauri/gen/android/gradlew
 
@@ -83,6 +125,9 @@ jobs:
           name: opnmanager-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
 
+      # ---------------------
+      # 🔐 Firma + Release
+      # ---------------------
       - name: Generate release keystore
         run: |
           keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
@@ -98,7 +143,9 @@ jobs:
             --storepass android \
             --keypass android
 
-      # 🏷️ Rinomina automatica dell'APK
+      # ---------------------
+      # 🏷️ Rinomina APK
+      # ---------------------
       - name: Rename release APK
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
@@ -114,6 +161,9 @@ jobs:
           name: opnmanager-release-apk
           path: ${{ env.RENAMED_APK }}
 
+      # ---------------------
+      # 🚀 Crea la Release GitHub
+      # ---------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
