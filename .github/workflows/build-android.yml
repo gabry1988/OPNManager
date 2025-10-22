@@ -1,4 +1,4 @@
-name: Build Android APK (Optimized Fast - Manual Checkout)
+name: Build Android APK (Optimized Fast)
 
 on:
   push:
@@ -21,18 +21,17 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - name: 🧰 Install git and tar
+      - name: 🧰 Install Git & Tar
         run: |
           sudo apt-get update
           sudo apt-get install -y git tar
           git --version
           tar --version
 
-      - name: 📥 Manual checkout
-        run: |
-          git clone https://github.com/${{ github.repository }} .
-          git fetch --tags
-          git checkout ${{ github.ref_name }}
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Cache node_modules
         uses: actions/cache@v4
@@ -91,12 +90,8 @@ jobs:
 
       - name: Install Android SDK & NDK components
         run: |
-          if [ ! -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ]; then
-            yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
-            sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
-          else
-            echo "✅ Android SDK & NDK already installed. Skipping."
-          fi
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
   # -----------------------------------------
   # 🧪 BUILD FRONTEND
@@ -105,11 +100,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     steps:
-      - name: 📥 Manual checkout
+      - name: 🧰 Install Git & Tar
         run: |
-          git clone https://github.com/${{ github.repository }} .
-          git fetch --tags
-          git checkout ${{ github.ref_name }}
+          sudo apt-get update
+          sudo apt-get install -y git tar
+
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/cache@v4
         with:
@@ -119,7 +118,7 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Upload build
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
@@ -132,11 +131,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
-      - name: 📥 Manual checkout
+      - name: 🧰 Install Git & Tar
         run: |
-          git clone https://github.com/${{ github.repository }} .
-          git fetch --tags
-          git checkout ${{ github.ref_name }}
+          sudo apt-get update
+          sudo apt-get install -y git tar
+
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Restore Cargo cache
         uses: actions/cache@v4
@@ -147,28 +150,15 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🧪 Precheck Environment
-        run: |
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
-          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
-          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
-          command -v cargo-tauri || (echo "❌ cargo-tauri not found" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
-          echo "✅ Precheck passed."
-
-      - name: Download frontend
+      - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
           path: build
 
-      - name: Build Android Debug
+      - name: Build Android Debug APK
         run: |
-          if [ -f ~/.cargo/env ]; then
-            source ~/.cargo/env
-          fi
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo tauri android build --debug
 
       - name: Upload Debug APK
@@ -184,11 +174,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
-      - name: 📥 Manual checkout
+      - name: 🧰 Install Git & Tar
         run: |
-          git clone https://github.com/${{ github.repository }} .
-          git fetch --tags
-          git checkout ${{ github.ref_name }}
+          sudo apt-get update
+          sudo apt-get install -y git tar
+
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Restore Cargo cache
         uses: actions/cache@v4
@@ -199,18 +193,7 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: 🧪 Precheck Environment
-        run: |
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
-          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
-          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
-          command -v cargo-tauri || (echo "❌ cargo-tauri not found" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
-          echo "✅ Precheck passed."
-
-      - name: Download frontend
+      - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
@@ -222,18 +205,16 @@ jobs:
             -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
             -alias opnmanager
 
-      - name: Build Android Release
+      - name: Build Android Release APK
         run: |
-          if [ -f ~/.cargo/env ]; then
-            source ~/.cargo/env
-          fi
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo tauri android build --release -- \
             --signing-key release-key.jks \
             --alias opnmanager \
             --storepass android \
             --keypass android
 
-      - name: Rename APK
+      - name: Rename Release APK
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
           APK_DIR="src-tauri/gen/android/app/build/outputs/apk/release"
