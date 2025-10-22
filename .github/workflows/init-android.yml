@@ -1,7 +1,7 @@
 name: Init Android Tauri
 
 on:
-  workflow_dispatch:    # 👉 significa: parte solo se lo lanci tu a mano
+  workflow_dispatch:
 
 jobs:
   init-android:
