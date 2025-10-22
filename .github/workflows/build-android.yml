@@ -113,6 +113,7 @@ jobs:
     needs: [setup, build-frontend]
     steps:
       - uses: actions/checkout@v4
+
       - name: Restore cargo cache
         uses: actions/cache@v4
         with:
@@ -121,11 +122,21 @@ jobs:
             ~/.cargo/git
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Ensure Tauri CLI is installed
+        run: |
+          source $HOME/.cargo/env
+          if ! command -v cargo-tauri &> /dev/null; then
+            cargo install tauri-cli --locked
+          fi
+          cargo tauri --version
+
       - name: Download frontend
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
           path: build
+
       - name: Build Android Debug
         run: |
           source $HOME/.cargo/env
