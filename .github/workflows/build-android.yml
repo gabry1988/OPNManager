@@ -12,11 +12,12 @@ env:
   NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
   TAURI_SKIP_DEVSERVER: true
   CARGO_TERM_COLOR: always
+  PATH: ${{ env.PATH }}:/home/runner/.cargo/bin
 
 jobs:
 
   # -----------------------------------------
-  # 🧰 SETUP AMBIENTE (una sola volta)
+  # 🧰 SETUP AMBIENTE
   # -----------------------------------------
   setup:
     runs-on: ubuntu-latest
@@ -24,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 🧭 Cache Node
+      # 📦 Cache Node modules
       - name: Cache node_modules
         uses: actions/cache@v4
         with:
@@ -40,8 +41,8 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      # 🦀 Cache Rust
-      - name: Cache cargo
+      # 🦀 Cache Cargo
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
@@ -59,7 +60,9 @@ jobs:
           rustup target add aarch64-linux-android armv7-linux-androideabi
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked || true
+        run: |
+          cargo install tauri-cli --locked
+          cargo tauri --version
 
       # 📱 Cache Android SDK
       - name: Cache Android SDK & NDK
@@ -82,11 +85,16 @@ jobs:
 
       - name: Install Android SDK & NDK components
         run: |
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+          if [ ! -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ]; then
+            echo "📥 Installing Android SDK & NDK..."
+            yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+            sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+          else
+            echo "✅ Android SDK & NDK already installed. Skipping."
+          fi
 
   # -----------------------------------------
-  # 🧪 BUILD FRONTEND (una sola volta)
+  # 🧪 BUILD FRONTEND
   # -----------------------------------------
   build-frontend:
     runs-on: ubuntu-latest
@@ -106,15 +114,14 @@ jobs:
           path: build
 
   # -----------------------------------------
-  # 📱 BUILD DEBUG APK (in parallelo)
+  # 📱 BUILD DEBUG
   # -----------------------------------------
   build-debug:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Restore cargo cache
+      - name: Restore Cargo cache
         uses: actions/cache@v4
         with:
           path: |
@@ -123,13 +130,8 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Ensure Tauri CLI is installed
-        run: |
-          source $HOME/.cargo/env
-          if ! command -v cargo-tauri &> /dev/null; then
-            cargo install tauri-cli --locked
-          fi
-          cargo tauri --version
+      - name: Check Tauri CLI
+        run: cargo tauri --version
 
       - name: Download frontend
         uses: actions/download-artifact@v4
@@ -138,9 +140,8 @@ jobs:
           path: build
 
       - name: Build Android Debug
-        run: |
-          source $HOME/.cargo/env
-          cargo tauri android build --debug
+        run: cargo tauri android build --debug
+
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -148,14 +149,14 @@ jobs:
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
 
   # -----------------------------------------
-  # 🔐 BUILD RELEASE APK (in parallelo)
+  # 🔐 BUILD RELEASE
   # -----------------------------------------
   build-release:
     runs-on: ubuntu-latest
-    needs: [setup, build-frontend]  # ❗ Non dipende più da debug
+    needs: [setup, build-frontend]
     steps:
       - uses: actions/checkout@v4
-      - name: Restore cargo cache
+      - name: Restore Cargo cache
         uses: actions/cache@v4
         with:
           path: |
@@ -163,24 +164,30 @@ jobs:
             ~/.cargo/git
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check Tauri CLI
+        run: cargo tauri --version
+
       - name: Download frontend
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
           path: build
+
       - name: Generate release keystore
         run: |
           keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
             -alias opnmanager
+
       - name: Build Android Release
         run: |
-          source $HOME/.cargo/env
           cargo tauri android build --release -- \
             --signing-key release-key.jks \
             --alias opnmanager \
             --storepass android \
             --keypass android
+
       - name: Rename APK
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
@@ -189,11 +196,13 @@ jobs:
           NEW_NAME="OPNManager-${TAG_NAME}-release.apk"
           mv "$APK_FILE" "$APK_DIR/$NEW_NAME"
           echo "RENAMED_APK=$APK_DIR/$NEW_NAME" >> $GITHUB_ENV
+
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: opnmanager-release-apk
           path: ${{ env.RENAMED_APK }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
