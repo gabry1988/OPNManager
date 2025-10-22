@@ -1,4 +1,4 @@
-name: Build Android APK (Optimized)
+name: Build Android APK (Optimized Parallel)
 
 on:
   push:
@@ -6,28 +6,28 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
+  TAURI_SKIP_DEVSERVER: true
+  CARGO_TERM_COLOR: always
+
+# ---------------------
+#  Common steps template (reusable)
+# ---------------------
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
-
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
-      TAURI_SKIP_DEVSERVER: true
-      CARGO_TERM_COLOR: always
-
+    outputs:
+      cache-key-sdk: ${{ steps.cache-sdk.outputs.cache-primary-key }}
+      cache-key-cli: ${{ steps.cache-tauri-cli.outputs.cache-primary-key }}
     steps:
-      # ---------------------
-      # 📥 Checkout
-      # ---------------------
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # ---------------------
-      # 🦀 Cache Rust
-      # ---------------------
-      - name: Cache cargo & target
+      # Cache cargo registry + target
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
@@ -35,24 +35,20 @@ jobs:
             ~/.cargo/git
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
 
-      # Cache rustup toolchains (per evitare di riscaricare i target)
+      # Cache Rust toolchains (target android)
       - name: Cache Rust targets
         uses: actions/cache@v4
         with:
           path: ~/.rustup/toolchains
           key: ${{ runner.os }}-rust-targets-v1
 
-      # ---------------------
-      # 📦 Cache Node modules
-      # ---------------------
-      - name: Cache node modules
+      # Cache Node modules
+      - name: Cache Node modules
         uses: actions/cache@v4
         with:
           path: node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          restore-keys: ${{ runner.os }}-node-
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -65,10 +61,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      # ---------------------
-      # 🧰 Cache Tauri CLI
-      # ---------------------
+      # Cache Tauri CLI
       - name: Cache Tauri CLI
+        id: cache-tauri-cli
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
@@ -93,10 +88,9 @@ jobs:
           rustup target add i686-linux-android
           rustup target add x86_64-linux-android
 
-      # ---------------------
-      # 🤖 Cache Android SDK
-      # ---------------------
+      # Cache Android SDK
       - name: Cache Android SDK & NDK
+        id: cache-sdk
         uses: actions/cache@v4
         with:
           path: /usr/local/lib/android/sdk
@@ -122,11 +116,32 @@ jobs:
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-      # ---------------------
-      # 🧱 Build
-      # ---------------------
       - name: Make gradlew executable
         run: chmod +x src-tauri/gen/android/gradlew
+
+# ---------------------
+#  Build Debug
+# ---------------------
+  build-debug:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Restore Tauri CLI cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-tauri-cli-v2
 
       - name: Build Android APK (Debug)
         run: |
@@ -139,9 +154,30 @@ jobs:
           name: opnmanager-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
 
-      # ---------------------
-      # 🔐 Firma + Release
-      # ---------------------
+# ---------------------
+#  Build Release
+# ---------------------
+  build-release:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Restore Tauri CLI cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-tauri-cli-v2
+
       - name: Generate release keystore
         run: |
           keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
@@ -157,9 +193,6 @@ jobs:
             --storepass android \
             --keypass android
 
-      # ---------------------
-      # 🏷️ Rinomina APK
-      # ---------------------
       - name: Rename release APK
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
@@ -175,13 +208,22 @@ jobs:
           name: opnmanager-release-apk
           path: ${{ env.RENAMED_APK }}
 
-      # ---------------------
-      # 🚀 Crea la Release GitHub
-      # ---------------------
+# ---------------------
+# 📦 Pubblicazione finale Release
+# ---------------------
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build-debug, build-release]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.RENAMED_APK }}
+          files: artifacts/**/*
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
