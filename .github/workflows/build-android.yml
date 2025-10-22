@@ -1,12 +1,12 @@
-name: Build Android APK (No-Actions, Split Jobs)
+name: Build Android APK (Jobs per Step)
 
 on:
   push:
-    tags: ['v*']        # build release su tag v*
-  workflow_dispatch: {} # build manuale da Actions
+    tags: ['v*']          # Release solo su tag tipo v3.1.2
+  workflow_dispatch: {}   # Avvio manuale
 
 permissions:
-  contents: write       # serve per pubblicare la release con gh
+  contents: write         # necessario per pubblicare asset su GitHub Release (job release)
 
 env:
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -18,25 +18,19 @@ env:
 
 jobs:
 
-  # ------------------------------------------------
-  # 📱 DEBUG — job completamente indipendente
-  # ------------------------------------------------
-  build-debug:
+  # 1) FETCH SOURCE -----------------------------------------------------------
+  fetch-source:
     runs-on: ubuntu-latest
     steps:
-      - name: 🧰 System deps (git/tar/java/etc.)
+      - name: 🧰 Ensure base tools
         run: |
-          set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y git tar curl unzip zip xz-utils build-essential pkg-config openjdk-17-jdk
-          git --version
-          tar --version
-          java -version
+          sudo apt-get install -y git tar
 
       - name: 📥 Clone repository (manual)
         run: |
-          set -euxo pipefail
-          git clone "https://github.com/${GITHUB_REPOSITORY}.git" .
+          git clone "https://github.com/${GITHUB_REPOSITORY}.git" src
+          cd src
           git fetch --all --tags --force
           if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
             git checkout -f "${GITHUB_REF_NAME}"
@@ -44,25 +38,91 @@ jobs:
             git checkout -f "${GITHUB_SHA}"
           fi
           git submodule update --init --recursive || true
+          cd ..
+          tar -czf source.tgz -C src .
+          echo "Created source.tgz"
+
+      - name: 📦 Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-tgz
+          path: source.tgz
+          if-no-files-found: error
+
+  # 2) FRONTEND BUILD ---------------------------------------------------------
+  build-frontend:
+    runs-on: ubuntu-latest
+    needs: fetch-source
+    steps:
+      - name: ⬇️ Download source
+        uses: actions/download-artifact@v4
+        with:
+          name: source-tgz
+          path: .
+
+      - name: 📦 Unpack source
+        run: |
+          mkdir -p repo && tar -xzf source.tgz -C repo
+          ls -la repo
 
       - name: 🟩 Install Node.js 20
         run: |
-          set -euxo pipefail
           curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
           sudo apt-get install -y nodejs
-          node -v
-          npm -v
+          node -v && npm -v
 
-      - name: 📦 npm ci + (opzionale) build frontend
+      - name: 📦 npm ci + build (vite)
+        working-directory: repo
         run: |
-          set -euxo pipefail
           npm ci
-          # tauri esegue già beforeBuildCommand, ma facciamo una build veloce per validare il frontend
-          npm run build || true
+          npm run build
+
+      - name: 📦 Pack dist
+        run: |
+          # salva solo l'output del frontend per riuso
+          tar -czf dist.tgz -C repo build dist .svelte-kit 2>/dev/null || true
+          # se non esistono queste cartelle, almeno creiamo un placeholder
+          if [ ! -f dist.tgz ]; then
+            tar -czf dist.tgz -C repo .
+          fi
+
+      - name: ⬆️ Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-tgz
+          path: dist.tgz
+          if-no-files-found: error
+
+  # 3) ANDROID DEBUG BUILD ----------------------------------------------------
+  build-debug:
+    runs-on: ubuntu-latest
+    needs: [fetch-source, build-frontend]
+    steps:
+      - name: ⬇️ Download source + dist
+        uses: actions/download-artifact@v4
+        with:
+          name: source-tgz
+          path: .
+
+      - name: ⬇️ Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-tgz
+          path: .
+
+      - name: 📦 Unpack source & dist
+        run: |
+          mkdir -p repo && tar -xzf source.tgz -C repo
+          tar -xzf dist.tgz -C repo || true
+          ls -la repo
+
+      - name: 🧰 System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl unzip zip xz-utils build-essential pkg-config openjdk-17-jdk
 
       - name: 🦀 Rust & Tauri CLI
         run: |
-          set -euxo pipefail
           curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           source "$HOME/.cargo/env"
@@ -72,7 +132,6 @@ jobs:
 
       - name: 🤖 Android SDK/NDK (non-interactive + licenses)
         run: |
-          set -euxo pipefail
           sudo mkdir -p "$ANDROID_SDK_ROOT"
           sudo chown -R "$USER:$USER" "$ANDROID_SDK_ROOT"
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
@@ -85,7 +144,6 @@ jobs:
           fi
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          # Licenze non-interattive (hash ufficiali)
           mkdir -p "$ANDROID_SDK_ROOT/licenses"
           printf "%s\n" "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
           printf "%s\n" "84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
@@ -93,27 +151,48 @@ jobs:
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-      - name: 🧪 Build Debug APK
+      - name: 🧪 Build Android Debug APK
+        working-directory: repo
         run: |
-          set -euxo pipefail
           source "$HOME/.cargo/env"
           cargo tauri android build --debug
-          echo "Debug APKs:"
-          find src-tauri/gen/android/app/build/outputs/apk/debug -maxdepth 1 -name "*.apk" -type f
+          echo "Debug APK(s):"
+          find src-tauri/gen/android/app/build/outputs/apk/debug -maxdepth 1 -name "*.apk" -type f || true
 
-  # ------------------------------------------------
-  # 🔐 RELEASE — job indipendente (solo su tag v*)
-  # ------------------------------------------------
+      - name: ⬆️ Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: opnmanager-debug-apk
+          path: repo/src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
+
+  # 4) ANDROID RELEASE BUILD + PUBLISH ---------------------------------------
   build-release:
     runs-on: ubuntu-latest
+    needs: [fetch-source, build-frontend]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: 🧰 System deps (git/tar/java/gh)
+      - name: ⬇️ Download source + dist
+        uses: actions/download-artifact@v4
+        with:
+          name: source-tgz
+          path: .
+
+      - name: ⬇️ Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-tgz
+          path: .
+
+      - name: 📦 Unpack source & dist
         run: |
-          set -euxo pipefail
+          mkdir -p repo && tar -xzf source.tgz -C repo
+          tar -xzf dist.tgz -C repo || true
+          ls -la repo
+
+      - name: 🧰 System deps (+ gh cli)
+        run: |
           sudo apt-get update
-          sudo apt-get install -y git tar curl unzip zip xz-utils build-essential pkg-config openjdk-17-jdk
-          # GitHub CLI per pubblicare la release
+          sudo apt-get install -y curl unzip zip xz-utils build-essential pkg-config openjdk-17-jdk
           type -p gh >/dev/null || {
             curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
             sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -121,26 +200,8 @@ jobs:
             sudo apt-get update && sudo apt-get install -y gh
           }
 
-      - name: 📥 Clone repository (manual)
-        run: |
-          set -euxo pipefail
-          git clone "https://github.com/${GITHUB_REPOSITORY}.git" .
-          git fetch --all --tags --force
-          git checkout -f "${GITHUB_REF_NAME}"
-          git submodule update --init --recursive || true
-
-      - name: 🟩 Install Node.js 20 + deps
-        run: |
-          set -euxo pipefail
-          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-          sudo apt-get install -y nodejs
-          npm ci
-          # opzionale: build frontend per fail-early
-          npm run build || true
-
       - name: 🦀 Rust & Tauri CLI
         run: |
-          set -euxo pipefail
           curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           source "$HOME/.cargo/env"
@@ -150,7 +211,6 @@ jobs:
 
       - name: 🤖 Android SDK/NDK (non-interactive + licenses)
         run: |
-          set -euxo pipefail
           sudo mkdir -p "$ANDROID_SDK_ROOT"
           sudo chown -R "$USER:$USER" "$ANDROID_SDK_ROOT"
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
@@ -170,11 +230,11 @@ jobs:
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-      - name: 🔐 Build Release APK (signed)
+      - name: 🔐 Build Android Release APK (signed)
+        working-directory: repo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euxo pipefail
           source "$HOME/.cargo/env"
           keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
@@ -195,10 +255,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euxo pipefail
           if ! gh release view "${GITHUB_REF_NAME}"; then
             gh release create "${GITHUB_REF_NAME}" "${APK_RELEASE}" --title "OPNManager ${GITHUB_REF_NAME}" --notes "Automated Android release"
           else
             gh release upload "${GITHUB_REF_NAME}" "${APK_RELEASE}" --clobber
           fi
-          echo "✅ Uploaded: ${APK_RELEASE}"
