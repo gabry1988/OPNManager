@@ -20,7 +20,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Cache per Rust
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -31,7 +30,6 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # Cache per Node.js
       - name: Cache node modules
         uses: actions/cache@v4
         with:
@@ -56,7 +54,6 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
 
-      # 👇 Installazione cmdline-tools
       - name: Install Android SDK cmdline-tools
         run: |
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
@@ -75,7 +72,6 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x src-tauri/gen/android/gradlew
 
-      # 🧪 Debug build
       - name: Build Android APK (Debug)
         run: |
           source $HOME/.cargo/env
@@ -87,14 +83,12 @@ jobs:
           name: opnmanager-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
 
-      # 🪙 Genera chiave per release
       - name: Generate release keystore
         run: |
           keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
             -alias opnmanager
 
-      # 📦 Build release firmata
       - name: Build Android APK (Release Signed)
         run: |
           source $HOME/.cargo/env
@@ -104,18 +98,26 @@ jobs:
             --storepass android \
             --keypass android
 
-      # 📤 Upload Release APK come artifact
+      # 🏷️ Rinomina automatica dell'APK
+      - name: Rename release APK
+        run: |
+          TAG_NAME=${GITHUB_REF_NAME}
+          APK_DIR="src-tauri/gen/android/app/build/outputs/apk/release"
+          APK_FILE=$(ls $APK_DIR/*.apk | head -n 1)
+          NEW_NAME="OPNManager-${TAG_NAME}-release.apk"
+          mv "$APK_FILE" "$APK_DIR/$NEW_NAME"
+          echo "RENAMED_APK=$APK_DIR/$NEW_NAME" >> $GITHUB_ENV
+
       - name: Upload Release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: opnmanager-release-apk
-          path: src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+          path: ${{ env.RENAMED_APK }}
 
-      # 🚀 Crea/aggiorna la release su GitHub
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: src-tauri/gen/android/app/build/outputs/apk/release/*.apk
+          files: ${{ env.RENAMED_APK }}
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
