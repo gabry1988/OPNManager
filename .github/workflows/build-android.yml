@@ -1,9 +1,9 @@
-name: Build Android APK (Optimized Fast)
+name: Build Android APK
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -16,10 +16,9 @@ jobs:
       NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
       TAURI_SKIP_DEVSERVER: true
       CARGO_TERM_COLOR: always
-      # NON mettere PATH qui o rompi /usr/bin
 
     steps:
-      - name: Sanity check: PATH & git
+      - name: Check git availability
         run: |
           echo "PATH=$PATH"
           command -v git
@@ -69,16 +68,13 @@ jobs:
           key: ${{ runner.os }}-tauri-cli-v2
 
       - name: Add Cargo bin to PATH
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Install Tauri CLI if missing
         run: |
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
-          if ! command -v cargo-tauri &> /dev/null; then
-            echo "⚠️ Tauri CLI non trovato, installo ora..."
+          if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
+          if ! command -v cargo-tauri >/dev/null 2>&1; then
             cargo install tauri-cli --locked
-          else
-            echo "✅ Tauri CLI già installato"
           fi
 
       - name: Restore Android SDK cache
@@ -87,25 +83,22 @@ jobs:
           path: /usr/local/lib/android/sdk
           key: ${{ runner.os }}-android-sdk-v2
 
-      - name: Add Android SDK to PATH
-        run: echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+      - name: Add Android SDK tools to PATH
+        run: echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - name: Install Android cmdline-tools if missing
         run: |
           if [ ! -f "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "📥 Installing Android cmdline-tools..."
-            mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-            cd $ANDROID_SDK_ROOT/cmdline-tools
+            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+            cd "$ANDROID_SDK_ROOT/cmdline-tools"
             curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
             unzip -q cmdline-tools.zip
             mv cmdline-tools latest
             rm cmdline-tools.zip
-          else
-            echo "✅ Android cmdline-tools già presenti (cache)"
           fi
 
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+        run: yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
 
       - name: Reinitialize Tauri Android project
         run: |
@@ -115,7 +108,7 @@ jobs:
 
       - name: Build Android APK (Debug)
         run: |
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
           cargo tauri android build --debug
 
       - name: Upload Debug APK
@@ -132,7 +125,7 @@ jobs:
 
       - name: Build Android APK (Release Signed)
         run: |
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
           cargo tauri android build --release -- \
             --signing-key release-key.jks \
             --alias opnmanager \
@@ -141,12 +134,12 @@ jobs:
 
       - name: Rename release APK
         run: |
-          TAG_NAME=${GITHUB_REF_NAME}
+          TAG_NAME="${GITHUB_REF_NAME}"
           APK_DIR="src-tauri/gen/android/app/build/outputs/apk/release"
-          APK_FILE=$(ls $APK_DIR/*.apk | head -n 1)
+          APK_FILE=$(ls "$APK_DIR"/*.apk | head -n 1)
           NEW_NAME="OPNManager-${TAG_NAME}-release.apk"
           mv "$APK_FILE" "$APK_DIR/$NEW_NAME"
-          echo "RENAMED_APK=$APK_DIR/$NEW_NAME" >> $GITHUB_ENV
+          echo "RENAMED_APK=$APK_DIR/$NEW_NAME" >> "$GITHUB_ENV"
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
