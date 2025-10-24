@@ -1,27 +1,17 @@
 #!/bin/bash
 set -e
 
-# 📌 Questo script serve per aggiornare un tag git e rilanciare la build automatica su GitHub
-# 📥 Aggiorna la tua copia locale del branch main
-# 🧽 Cancella eventuale tag remoto esistente
-# 🏷️ Crea e pusha il nuovo tag
+# 📌 Tag fisso da usare
+TAG="v3.1.2"
 
-# 🛑 Controllo versione passata
-if [ -z "$1" ]; then
-  echo "❌ Errore: devi specificare la versione. Esempio:"
-  echo "./scripts/retag.sh 3.1.5"
-  exit 1
-fi
+echo "🏷️ Rilascio forzato del tag $TAG"
 
-VERSION="$1"
-TAG="v$VERSION"
-
-# 📥 Aggiorna il branch main locale
-echo "📥 Aggiorno branch locale..."
+# 📥 Aggiorna il branch locale main
+echo "📥 Eseguo git pull..."
 git pull origin main
 
-# 🔄 Sincronizza anche i tag remoti
-echo "🔄 Aggiorno lista tag..."
+# 🔄 Aggiorno lista tag remoti
+echo "🔄 Aggiorno i tag remoti..."
 git fetch --tags
 
 # 🧽 Rimuovo eventuale tag locale esistente
@@ -40,8 +30,7 @@ fi
 echo "🏷️ Creo nuovo tag $TAG"
 git tag "$TAG"
 
-echo "🚀 Pusho nuovo tag su origin"
+echo "🚀 Pusho il nuovo tag su origin..."
 git push origin "$TAG"
 
-echo "✅ Fatto! È stato creato e pushato il tag $TAG."
-echo "ℹ️ La build GitHub Actions partirà automaticamente."
+echo "✅ Fatto! La build GitHub Actions partirà automaticamente per $TAG."
