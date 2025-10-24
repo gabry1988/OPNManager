@@ -14,13 +14,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # -----------------------------------------
-  # 🧰 SETUP
-  # -----------------------------------------
+  # 🧰 1. SETUP AMBIENTE
   setup:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Cache node_modules
@@ -51,7 +49,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Add cargo bin to PATH (job)
+      - name: Add cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install Rust Android targets
@@ -82,36 +80,31 @@ jobs:
 
       - name: Install Android SDK & NDK components
         run: |
-          if [ ! -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ]; then
-            yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
-            sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
-          else
-            echo "✅ Android SDK & NDK already installed. Skipping."
-          fi
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-  # -----------------------------------------
-  # 🧪 BUILD FRONTEND
-  # -----------------------------------------
+  # 🧪 2. BUILD FRONTEND
   build-frontend:
     runs-on: ubuntu-latest
     needs: setup
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/cache@v4
         with:
           path: node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+
       - name: Build frontend
         run: npm run build
-      - name: Upload build
+
+      - name: Upload frontend build
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
           path: build
 
-  # -----------------------------------------
-  # 📱 BUILD DEBUG
-  # -----------------------------------------
+  # 📱 3. BUILD ANDROID DEBUG
   build-debug:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
@@ -127,21 +120,17 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Add cargo bin to PATH (job)
+      - name: Add cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Precheck Environment
+      - name: Check Environment
         run: |
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
-          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
-          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
-          command -v cargo-tauri >/dev/null || (echo "❌ cargo-tauri not found" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
-          echo "✅ Precheck passed."
+          which tar
+          which cargo-tauri
+          rustup target list --installed
+          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || exit 1
 
-      - name: Download frontend
+      - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
@@ -158,9 +147,7 @@ jobs:
           name: opnmanager-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
 
-  # -----------------------------------------
-  # 🔐 BUILD RELEASE
-  # -----------------------------------------
+  # 🔐 4. BUILD ANDROID RELEASE
   build-release:
     runs-on: ubuntu-latest
     needs: [setup, build-frontend]
@@ -176,21 +163,17 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Add cargo bin to PATH (job)
+      - name: Add cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Precheck Environment
+      - name: Check Environment
         run: |
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
-          rustup target list --installed | grep -q aarch64-linux-android || (echo "❌ Missing aarch64 target" && exit 1)
-          rustup target list --installed | grep -q armv7-linux-androideabi || (echo "❌ Missing armv7 target" && exit 1)
-          command -v cargo-tauri >/dev/null || (echo "❌ cargo-tauri not found" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || (echo "❌ Missing Android SDK 34" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/ndk/25.2.9519653" ] || (echo "❌ Missing NDK" && exit 1)
-          [ -d "$ANDROID_SDK_ROOT/build-tools/34.0.0" ] || (echo "❌ Missing build-tools" && exit 1)
-          echo "✅ Precheck passed."
+          which tar
+          which cargo-tauri
+          rustup target list --installed
+          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || exit 1
 
-      - name: Download frontend
+      - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
