@@ -16,12 +16,11 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # ✅ Checkout repository senza tar
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+      # ✅ Clona il repository manualmente (no tar, no checkout action)
+      - name: Git clone repository
+        run: |
+          git clone --depth=1 https://github.com/${{ github.repository }} .
+          git fetch --tags
 
       # 🦀 Installa toolchain Rust
       - name: Install Rust toolchain
