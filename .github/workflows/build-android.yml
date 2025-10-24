@@ -19,9 +19,11 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # 🧰 FIX tar not found
+      # 🧰 FIX tar not found (senza sudo)
       - name: Install tar
-        run: sudo apt-get update && sudo apt-get install -y tar
+        run: |
+          apt-get update
+          apt-get install -y tar
 
       # ✅ Checkout del repository
       - name: Checkout repository
