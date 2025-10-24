@@ -1,4 +1,4 @@
-name: Build Android APK (Optimized Auto Init)
+name: Build Android APK (Optimized Fast)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  setup:
+  build:
     runs-on: ubuntu-latest
 
     env:
@@ -19,12 +19,16 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # 📥 Clona repository
+      # ✅ Checkout senza tar
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
 
       # 🦀 Cache Rust
-      - name: Cache cargo & target
+      - name: Restore cargo & target cache
         uses: actions/cache@v4
         with:
           path: |
@@ -35,14 +39,13 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       # 📦 Cache Node modules
-      - name: Cache node modules
+      - name: Restore node modules cache
         uses: actions/cache@v4
         with:
           path: node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
           restore-keys: ${{ runner.os }}-node-
 
-      # 🧰 Node.js
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -58,8 +61,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # 🧰 Cache Tauri CLI
-      - name: Cache Tauri CLI
+      # 🧰 Restore Tauri CLI
+      - name: Restore Tauri CLI cache
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
@@ -76,63 +79,43 @@ jobs:
             echo "✅ Tauri CLI già installato"
           fi
 
-      # 🤖 Cache Android SDK
-      - name: Cache Android SDK & NDK
+      # 🤖 Restore Android SDK cache
+      - name: Restore Android SDK cache
         uses: actions/cache@v4
         with:
           path: /usr/local/lib/android/sdk
           key: ${{ runner.os }}-android-sdk-v2
 
-      - name: Install Android SDK cmdline-tools if not cached
-        run: |
-          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            echo "📥 Installing Android cmdline-tools..."
-            mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-            cd $ANDROID_SDK_ROOT/cmdline-tools
-            curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
-            unzip -q cmdline-tools.zip
-            mv cmdline-tools latest
-            rm cmdline-tools.zip
-          else
-            echo "✅ Android SDK già presente"
-          fi
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
 
-      - name: Install Android SDK & NDK components
-        run: |
-          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
-
-      # 🧹 Reinizializza progetto Android (evita errori con identifier)
-      - name: 🧹 Reinitialize Tauri Android project
+      # 🧹 Reinitialize Tauri Android project
+      - name: Reinitialize Tauri Android project
         run: |
           rm -rf src-tauri/gen/android
           cd src-tauri
           cargo tauri android init --force
 
-      # 🏗️ Build Debug
+      # 🏗️ Build Debug APK
       - name: Build Android APK (Debug)
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo tauri android build --debug
 
-      - name: Upload Debug APK artifact
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: opnmanager-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
 
-      # 🔐 Firma Release
+      # 🔐 Genera keystore e build Release firmata
       - name: Generate release keystore
         run: |
           keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
             -alias opnmanager
 
-      # 🏗️ Build Release
       - name: Build Android APK (Release Signed)
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
@@ -143,7 +126,7 @@ jobs:
             --storepass android \
             --keypass android
 
-      # 🏷️ Rinomina Release APK
+      # 🏷️ Rinomina APK
       - name: Rename release APK
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
@@ -153,13 +136,13 @@ jobs:
           mv "$APK_FILE" "$APK_DIR/$NEW_NAME"
           echo "RENAMED_APK=$APK_DIR/$NEW_NAME" >> $GITHUB_ENV
 
-      - name: Upload Release APK artifact
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: opnmanager-release-apk
           path: ${{ env.RENAMED_APK }}
 
-      # 🚀 Pubblica su GitHub Release
+      # 🚀 Crea release su GitHub
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
