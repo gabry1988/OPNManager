@@ -1,0 +1,40 @@
+name: Clear All Build Caches
+
+on:
+  workflow_dispatch:
+
+jobs:
+  clear:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clear Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-dummy
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Clear Node modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-dummy
+          restore-keys: ${{ runner.os }}-node-
+      - name: Clear Tauri CLI cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-tauri-cli-dummy
+          restore-keys: ${{ runner.os }}-tauri-cli-
+      - name: Clear Android SDK cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: ${{ runner.os }}-android-sdk-dummy
+          restore-keys: ${{ runner.os }}-android-sdk-
+
+      - name: ✅ Cache clear complete
+        run: echo "🧼 Tutte le cache sono state invalidate. La prossima build ripartirà da zero."
