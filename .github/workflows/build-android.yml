@@ -16,8 +16,17 @@ env:
 jobs:
   # 🧰 1. SETUP AMBIENTE
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
+      - name: Install tar if missing
+        run: |
+          if ! command -v tar >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y tar
+          fi
+          which tar
+          tar --version
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -85,7 +94,7 @@ jobs:
 
   # 🧪 2. BUILD FRONTEND
   build-frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: setup
     steps:
       - uses: actions/checkout@v4
@@ -106,9 +115,16 @@ jobs:
 
   # 📱 3. BUILD ANDROID DEBUG
   build-debug:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [setup, build-frontend]
     steps:
+      - name: Install tar if missing
+        run: |
+          if ! command -v tar >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y tar
+          fi
+
       - uses: actions/checkout@v4
 
       - name: Restore Cargo cache
@@ -149,9 +165,16 @@ jobs:
 
   # 🔐 4. BUILD ANDROID RELEASE
   build-release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [setup, build-frontend]
     steps:
+      - name: Install tar if missing
+        run: |
+          if ! command -v tar >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y tar
+          fi
+
       - uses: actions/checkout@v4
 
       - name: Restore Cargo cache
