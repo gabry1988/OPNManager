@@ -1,8 +1,12 @@
 #!/bin/bash
 set -e
 
-# 📌 Tag fisso da usare
-TAG="v3.1.2"
+# 📌 Se passi una versione come argomento la usa, altrimenti default v3.1.2
+if [ -n "$1" ]; then
+  TAG="v$1"
+else
+  TAG="v3.1.2"
+fi
 
 echo "🏷️ Rilascio forzato del tag $TAG"
 
