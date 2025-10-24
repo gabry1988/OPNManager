@@ -14,21 +14,23 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # 🧰 1. SETUP AMBIENTE
+  # 🧰 1. SETUP ENVIRONMENT
   setup:
     runs-on: ubuntu-22.04
     steps:
-      - name: Install tar if missing
-        run: |
-          if ! command -v tar >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y tar
-          fi
-          which tar
-          tar --version
-
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          show-progress: true
+
+      - name: Verify tools
+        run: |
+          which git
+          which tar
+          git --version
+          tar --version
 
       - name: Cache node_modules
         uses: actions/cache@v4
@@ -37,7 +39,7 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
           restore-keys: ${{ runner.os }}-node-
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -45,7 +47,7 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Cache Cargo
+      - name: Cache Cargo registry & target
         uses: actions/cache@v4
         with:
           path: |
@@ -55,7 +57,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Install Rust
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Add cargo bin to PATH
@@ -98,6 +100,9 @@ jobs:
     needs: setup
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/cache@v4
         with:
@@ -118,14 +123,10 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [setup, build-frontend]
     steps:
-      - name: Install tar if missing
-        run: |
-          if ! command -v tar >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y tar
-          fi
-
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Restore Cargo cache
         uses: actions/cache@v4
@@ -138,13 +139,6 @@ jobs:
 
       - name: Add cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Check Environment
-        run: |
-          which tar
-          which cargo-tauri
-          rustup target list --installed
-          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || exit 1
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
@@ -168,14 +162,10 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [setup, build-frontend]
     steps:
-      - name: Install tar if missing
-        run: |
-          if ! command -v tar >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y tar
-          fi
-
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Restore Cargo cache
         uses: actions/cache@v4
@@ -188,13 +178,6 @@ jobs:
 
       - name: Add cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Check Environment
-        run: |
-          which tar
-          which cargo-tauri
-          rustup target list --installed
-          [ -d "$ANDROID_SDK_ROOT/platforms/android-34" ] || exit 1
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
