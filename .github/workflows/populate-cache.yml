@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  populate-cache:
+  cache:
     runs-on: ubuntu-latest
 
     env:
@@ -16,19 +16,30 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # 📥 Clona il repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+      # 🧰 Installa Git (serve per evitare l'errore "tar not found")
+      - name: Install Git
+        run: |
+          apt-get update
+          apt-get install -y git
+
+      # 📥 Checkout repository tramite Git (niente tar)
+      - name: Checkout repository (with Git)
+        run: |
+          git clone --depth=1 https://github.com/${{ github.repository }} .
+          git fetch --tags
 
       # 🦀 Installa toolchain Rust
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # 🧰 Cache Cargo (⚡ chiave aggiornata)
-      - name: Cache Cargo
+      # 🧰 Cache Cargo
+      - name: Populate Cargo cache
+        run: |
+          cargo fetch
+        env:
+          CARGO_HOME: ~/.cargo
+
+      - name: Save Cargo cache
         uses: actions/cache@v4
         with:
           path: |
@@ -36,55 +47,36 @@ jobs:
             ~/.cargo/git
             src-tauri/target
           key: ${{ runner.os }}-cargo-v3
-          restore-keys: ${{ runner.os }}-cargo-
 
-      # 📦 Installa Tauri CLI
+      # 🧰 Installa Tauri CLI
       - name: Install Tauri CLI
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo install tauri-cli --locked
 
-      # 🧰 Cache Tauri CLI binario
-      - name: Cache Tauri CLI binary
+      # 🧰 Salva cache Tauri CLI
+      - name: Save Tauri CLI cache
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
           key: ${{ runner.os }}-tauri-cli-v3
 
-      # 🤖 Cache Android SDK
-      - name: Cache Android SDK
+      # 🤖 Prepara Android SDK
+      - name: Install Android SDK tools
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o tools.zip
+          unzip -q tools.zip
+          rm tools.zip
+          mv cmdline-tools latest
+
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+
+      - name: Save Android SDK cache
         uses: actions/cache@v4
         with:
           path: /usr/local/lib/android/sdk
           key: ${{ runner.os }}-android-sdk-v2
-
-      # 📥 Installa SDK Android (se non in cache)
-      - name: Install Android SDK cmdline-tools
-        run: |
-          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-            cd $ANDROID_SDK_ROOT/cmdline-tools
-            curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
-            unzip -q cmdline-tools.zip
-            mv cmdline-tools latest
-            rm cmdline-tools.zip
-          fi
-          echo "PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_ENV
-
-      # 📜 Accetta le licenze
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
-
-      # 📦 Installa componenti Android
-      - name: Install Android SDK components
-        run: |
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
-
-      # 🧪 Test build Tauri (per scaldare la cache)
-      - name: Warm up build cache
-        run: |
-          cd src-tauri
-          export PATH="$HOME/.cargo/bin:$PATH"
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
-          cargo check
