@@ -19,16 +19,15 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # ✅ Checkout senza tar
+      # ✅ Checkout pulito
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: false
           persist-credentials: false
 
-      # 🦀 Cache Rust
-      - name: Restore cargo & target cache
+      # 🦀 Restore Cargo cache
+      - name: Restore Cargo cache
         uses: actions/cache@v4
         with:
           path: |
@@ -38,7 +37,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # 📦 Cache Node modules
+      # 📦 Restore Node modules cache
       - name: Restore node modules cache
         uses: actions/cache@v4
         with:
@@ -61,7 +60,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # 🧰 Restore Tauri CLI
+      # 🧰 Restore Tauri CLI cache
       - name: Restore Tauri CLI cache
         uses: actions/cache@v4
         with:
@@ -142,7 +141,6 @@ jobs:
           name: opnmanager-release-apk
           path: ${{ env.RENAMED_APK }}
 
-      # 🚀 Crea release su GitHub
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
