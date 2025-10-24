@@ -19,12 +19,17 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
+      # 🧰 FIX tar not found
+      - name: Install tar
+        run: sudo apt-get update && sudo apt-get install -y tar
+
       # ✅ Checkout del repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
+          use-git: true
 
       # 🦀 Restore Cargo cache
       - name: Restore Cargo cache
