@@ -13,10 +13,8 @@ jobs:
       NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
       TAURI_SKIP_DEVSERVER: true
       CARGO_TERM_COLOR: always
-      PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # ✅ Checkout minimale — niente TAR
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -25,7 +23,7 @@ jobs:
       - name: Verify Git
         run: git --version
 
-      # 🦀 Cache Cargo
+      # Cache Cargo
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -36,7 +34,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # 📦 Cache Node modules
+      # Cache Node
       - name: Cache node modules
         uses: actions/cache@v4
         with:
@@ -55,29 +53,31 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      # 🦀 Install Rust toolchain
+      # Rust toolchain
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # 🧰 Cache Tauri CLI
+      # Tauri CLI cache
       - name: Cache Tauri CLI
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
           key: ${{ runner.os }}-tauri-cli-v2
 
+      - name: Add Cargo bin to PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Install Tauri CLI if missing
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           if ! command -v cargo-tauri &> /dev/null; then
-            echo "⚠️ Tauri CLI non trovato, installo ora..."
+            echo "⚠️ Installing Tauri CLI..."
             cargo install tauri-cli --locked
           else
-            echo "✅ Tauri CLI già installato"
+            echo "✅ Tauri CLI already present"
           fi
 
-      # 🤖 Cache Android SDK & NDK
+      # Android SDK cache
       - name: Cache Android SDK & NDK
         uses: actions/cache@v4
         with:
@@ -87,15 +87,12 @@ jobs:
       - name: Install Android cmdline-tools if missing
         run: |
           if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            echo "📥 Installing Android cmdline-tools..."
             mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
             cd $ANDROID_SDK_ROOT/cmdline-tools
             curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
             unzip -q cmdline-tools.zip
             mv cmdline-tools latest
             rm cmdline-tools.zip
-          else
-            echo "✅ Android SDK già presente"
           fi
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
@@ -106,5 +103,5 @@ jobs:
         run: |
           sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-      - name: ✅ Cache popolata
-        run: echo "✅ Cache Android, Cargo e Node popolata con successo!"
+      - name: ✅ Cache populated
+        run: echo "✅ Done"
