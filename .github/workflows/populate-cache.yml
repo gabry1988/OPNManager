@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  populate:
+  populate-cache:
     runs-on: ubuntu-latest
 
     env:
@@ -13,17 +13,21 @@ jobs:
       NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
       TAURI_SKIP_DEVSERVER: true
       CARGO_TERM_COLOR: always
+      PATH: $PATH:$HOME/.cargo/bin
 
     steps:
+      # 📥 Clona il repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Verify Git
-        run: git --version
+      # 🦀 Installa toolchain Rust
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      # Cache Cargo
+      # 🧰 Cache Cargo (⚡ chiave aggiornata)
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -31,60 +35,32 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-v3
           restore-keys: ${{ runner.os }}-cargo-
 
-      # Cache Node
-      - name: Cache node modules
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          restore-keys: ${{ runner.os }}-node-
+      # 📦 Installa Tauri CLI
+      - name: Install Tauri CLI
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          cargo install tauri-cli --locked
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Build frontend
-        run: npm run build
-
-      # Rust toolchain
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      # Tauri CLI cache
-      - name: Cache Tauri CLI
+      # 🧰 Cache Tauri CLI binario
+      - name: Cache Tauri CLI binary
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
-          key: ${{ runner.os }}-tauri-cli-v2
+          key: ${{ runner.os }}-tauri-cli-v3
 
-      - name: Add Cargo bin to PATH
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Install Tauri CLI if missing
-        run: |
-          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
-          if ! command -v cargo-tauri &> /dev/null; then
-            echo "⚠️ Installing Tauri CLI..."
-            cargo install tauri-cli --locked
-          else
-            echo "✅ Tauri CLI already present"
-          fi
-
-      # Android SDK cache
-      - name: Cache Android SDK & NDK
+      # 🤖 Cache Android SDK
+      - name: Cache Android SDK
         uses: actions/cache@v4
         with:
           path: /usr/local/lib/android/sdk
           key: ${{ runner.os }}-android-sdk-v2
 
-      - name: Install Android cmdline-tools if missing
+      # 📥 Installa SDK Android (se non in cache)
+      - name: Install Android SDK cmdline-tools
         run: |
           if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
             mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
@@ -94,14 +70,21 @@ jobs:
             mv cmdline-tools latest
             rm cmdline-tools.zip
           fi
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_ENV
 
+      # 📜 Accetta le licenze
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
 
-      - name: Install Android SDK & NDK components
+      # 📦 Installa componenti Android
+      - name: Install Android SDK components
         run: |
-          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-      - name: ✅ Cache populated
-        run: echo "✅ Done"
+      # 🧪 Test build Tauri (per scaldare la cache)
+      - name: Warm up build cache
+        run: |
+          cd src-tauri
+          export PATH="$HOME/.cargo/bin:$PATH"
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          cargo check
