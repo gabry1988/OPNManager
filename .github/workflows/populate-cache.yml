@@ -1,0 +1,106 @@
+name: Populate Build Cache
+
+on:
+  workflow_dispatch:
+
+jobs:
+  populate:
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
+      TAURI_SKIP_DEVSERVER: true
+      CARGO_TERM_COLOR: always
+      PATH: $PATH:$HOME/.cargo/bin
+
+    steps:
+      # 📥 Clona repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 🦀 Cache Rust dependencies
+      - name: Cache cargo & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # 📦 Cache Node modules
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-node-
+
+      # 🧰 Node.js setup
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build frontend (per generare cache Vite)
+        run: npm run build
+
+      # 🦀 Rust toolchain
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # 🧰 Cache Tauri CLI
+      - name: Cache Tauri CLI
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-tauri-cli-v2
+
+      - name: Install Tauri CLI if missing
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+          if ! command -v cargo-tauri &> /dev/null; then
+            echo "⚠️ Tauri CLI non trovato, installo ora..."
+            cargo install tauri-cli --locked
+          else
+            echo "✅ Tauri CLI già installato"
+          fi
+
+      # 🤖 Cache Android SDK & NDK
+      - name: Cache Android SDK & NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: ${{ runner.os }}-android-sdk-v2
+
+      - name: Install Android SDK cmdline-tools if not cached
+        run: |
+          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            echo "📥 Installing Android cmdline-tools..."
+            mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+            cd $ANDROID_SDK_ROOT/cmdline-tools
+            curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
+            unzip -q cmdline-tools.zip
+            mv cmdline-tools latest
+            rm cmdline-tools.zip
+          else
+            echo "✅ Android SDK già presente"
+          fi
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+
+      - name: Install Android SDK & NDK components
+        run: |
+          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+
+      - name: ✅ Cache populated successfully
+        run: echo "✅ Tutte le cache sono state generate!"
