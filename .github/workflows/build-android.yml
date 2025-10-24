@@ -19,19 +19,11 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # 🧰 FIX tar not found (senza sudo)
-      - name: Install tar
+      # ✅ Checkout manuale (senza tar)
+      - name: Clone repository manually
         run: |
-          apt-get update
-          apt-get install -y tar
-
-      # ✅ Checkout del repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          use-git: true
+          git clone --depth=1 https://github.com/${{ github.repository }} .
+          git fetch --tags
 
       # 🦀 Restore Cargo cache
       - name: Restore Cargo cache
