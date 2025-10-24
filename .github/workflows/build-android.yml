@@ -106,6 +106,15 @@ jobs:
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+
+          # 👇 fallback per Tauri CLI se la cache non l'ha ripristinato
+          if ! command -v cargo-tauri &> /dev/null; then
+            echo "⚠️ Tauri CLI non trovato, installo ora..."
+            cargo install tauri-cli --locked
+          else
+            echo "✅ Tauri CLI trovato"
+          fi
+
           cargo tauri android build --debug
 
       - name: Upload Debug APK artifact
@@ -148,6 +157,15 @@ jobs:
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
+
+          # 👇 fallback per Tauri CLI anche qui
+          if ! command -v cargo-tauri &> /dev/null; then
+            echo "⚠️ Tauri CLI non trovato, installo ora..."
+            cargo install tauri-cli --locked
+          else
+            echo "✅ Tauri CLI trovato"
+          fi
+
           cargo tauri android build --release -- \
             --signing-key release-key.jks \
             --alias opnmanager \
