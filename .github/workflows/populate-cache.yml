@@ -5,7 +5,7 @@ on:
 
 jobs:
   cache:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest    # 👈 Forza uso runner con apt disponibile
 
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -16,20 +16,25 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # ✅ Clona il repository manualmente (no tar, no checkout action)
+      # 🧰 Installa Git per evitare errori "git not found"
+      - name: Install Git
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git
+
+      # 📥 Clona repo manualmente (no tar)
       - name: Git clone repository
         run: |
           git clone --depth=1 https://github.com/${{ github.repository }} .
           git fetch --tags
 
-      # 🦀 Installa toolchain Rust
+      # 🦀 Installa Rust toolchain
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # 🧰 Prepara Cargo cache
+      # 🧰 Prepara cache Cargo
       - name: Populate Cargo cache
-        run: |
-          cargo fetch
+        run: cargo fetch
         env:
           CARGO_HOME: ~/.cargo
 
