@@ -137,6 +137,11 @@ jobs:
       - name: Add cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      - name: Install Tauri CLI
+        run: |
+          cargo install tauri-cli --locked
+          cargo tauri --version
+
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
@@ -172,6 +177,11 @@ jobs:
 
       - name: Add cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Tauri CLI
+        run: |
+          cargo install tauri-cli --locked
+          cargo tauri --version
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
