@@ -16,23 +16,18 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # 🧰 Installa Git (serve per evitare l'errore "tar not found")
-      - name: Install Git
-        run: |
-          apt-get update
-          apt-get install -y git
-
-      # 📥 Checkout repository tramite Git (niente tar)
-      - name: Checkout repository (with Git)
-        run: |
-          git clone --depth=1 https://github.com/${{ github.repository }} .
-          git fetch --tags
+      # ✅ Checkout repository senza tar
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       # 🦀 Installa toolchain Rust
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # 🧰 Cache Cargo
+      # 🧰 Prepara Cargo cache
       - name: Populate Cargo cache
         run: |
           cargo fetch
@@ -55,15 +50,14 @@ jobs:
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo install tauri-cli --locked
 
-      # 🧰 Salva cache Tauri CLI
       - name: Save Tauri CLI cache
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
           key: ${{ runner.os }}-tauri-cli-v3
 
-      # 🤖 Prepara Android SDK
-      - name: Install Android SDK tools
+      # 🤖 Android SDK
+      - name: Install Android SDK commandline-tools
         run: |
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           cd $ANDROID_SDK_ROOT/cmdline-tools
