@@ -16,17 +16,17 @@ jobs:
       NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
       TAURI_SKIP_DEVSERVER: true
       CARGO_TERM_COLOR: always
+      PATH: $PATH:$HOME/.cargo/bin
 
     steps:
+      # ✅ Checkout del repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Verify Git
-        run: git --version
-
-      # Cargo cache
+      # 🦀 Restore Cargo cache
       - name: Restore Cargo cache
         uses: actions/cache@v4
         with:
@@ -37,7 +37,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # Node cache
+      # 📦 Restore Node modules cache
       - name: Restore node modules cache
         uses: actions/cache@v4
         with:
@@ -45,6 +45,7 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
           restore-keys: ${{ runner.os }}-node-
 
+      # 🟡 Setup Node.js
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -56,50 +57,70 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      # Rust
+      # 🦀 Install Rust toolchain
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Tauri CLI cache
+      # 🧰 Restore Tauri CLI cache
       - name: Restore Tauri CLI cache
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
           key: ${{ runner.os }}-tauri-cli-v2
 
-      - name: Add Cargo bin to PATH
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
+      # 📥 Install Tauri CLI if missing
       - name: Install Tauri CLI if missing
         run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           if ! command -v cargo-tauri &> /dev/null; then
-            echo "⚠️ Installing Tauri CLI..."
+            echo "⚠️ Tauri CLI non trovato, installo ora..."
             cargo install tauri-cli --locked
           else
-            echo "✅ Tauri CLI already present"
+            echo "✅ Tauri CLI già installato"
           fi
 
-      # Android SDK
+      # 🤖 Restore Android SDK cache
       - name: Restore Android SDK cache
         uses: actions/cache@v4
         with:
           path: /usr/local/lib/android/sdk
           key: ${{ runner.os }}-android-sdk-v2
 
+      # 🛠️ Add Android SDK tools to PATH
+      - name: Add Android SDK to PATH
+        run: echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+      # 📦 Install Android cmdline-tools if not cached
+      - name: Install Android cmdline-tools if missing
+        run: |
+          if [ ! -f "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "📥 Installing Android cmdline-tools..."
+            mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+            cd $ANDROID_SDK_ROOT/cmdline-tools
+            curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
+            unzip cmdline-tools.zip
+            mv cmdline-tools latest
+            rm cmdline-tools.zip
+          else
+            echo "✅ Android cmdline-tools già presenti (cache)"
+          fi
+
+      # ✅ Accept SDK licenses
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
 
-      # Re-init progetto Android (coerente con identifier)
+      # 🧹 Reinitialize Tauri Android project
       - name: Reinitialize Tauri Android project
         run: |
           rm -rf src-tauri/gen/android
           cd src-tauri
           cargo tauri android init --force
 
-      # Build Debug
+      # 🏗️ Build Debug APK
       - name: Build Android APK (Debug)
         run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo tauri android build --debug
 
@@ -109,16 +130,16 @@ jobs:
           name: opnmanager-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
 
-      # Release keystore
+      # 🔐 Genera keystore e build Release firmata
       - name: Generate release keystore
         run: |
           keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
             -alias opnmanager
 
-      # Build Release firmata
       - name: Build Android APK (Release Signed)
         run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo tauri android build --release -- \
             --signing-key release-key.jks \
@@ -126,7 +147,7 @@ jobs:
             --storepass android \
             --keypass android
 
-      # Rinomina + upload
+      # 🏷️ Rinomina APK
       - name: Rename release APK
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
