@@ -16,20 +16,22 @@ jobs:
       NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
       TAURI_SKIP_DEVSERVER: true
       CARGO_TERM_COLOR: always
-      PATH: $PATH:$HOME/.cargo/bin
+      # ❌ NON mettere PATH qui o rompi /usr/bin
 
     steps:
-      # ✅ Checkout SENZA tar
+      # 👀 Verifica che git sia disponibile PRIMA del checkout
+      - name: Sanity check: PATH & git
+        run: |
+          echo "PATH=$PATH"
+          command -v git
+          git --version
+
+      # ✅ Checkout SENZA tar (git usato perché è nel PATH di sistema)
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-          lfs: false
-          submodules: false
-          fetch-tags: true
-          clean: false
-          use-git: true
 
       # 🦀 Restore Cargo cache
       - name: Restore Cargo cache
@@ -73,9 +75,13 @@ jobs:
           path: ~/.cargo/bin
           key: ${{ runner.os }}-tauri-cli-v2
 
+      # ➕ Aggiungi correttamente ~/.cargo/bin al PATH
+      - name: Add Cargo bin to PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      # 📥 Install Tauri CLI if missing
       - name: Install Tauri CLI if missing
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           if ! command -v cargo-tauri &> /dev/null; then
             echo "⚠️ Tauri CLI non trovato, installo ora..."
@@ -103,7 +109,7 @@ jobs:
             mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
             cd $ANDROID_SDK_ROOT/cmdline-tools
             curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
-            unzip cmdline-tools.zip
+            unzip -q cmdline-tools.zip
             mv cmdline-tools latest
             rm cmdline-tools.zip
           else
@@ -124,7 +130,6 @@ jobs:
       # 🏗️ Build Debug APK
       - name: Build Android APK (Debug)
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo tauri android build --debug
 
@@ -143,7 +148,6 @@ jobs:
 
       - name: Build Android APK (Release Signed)
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
           if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi
           cargo tauri android build --release -- \
             --signing-key release-key.jks \
