@@ -104,7 +104,7 @@ jobs:
         run: |
           rm -rf src-tauri/gen/android
           cd src-tauri
-          cargo tauri android init --force
+          cargo tauri android init
 
       - name: Build Android APK (Debug)
         run: |
