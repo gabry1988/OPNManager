@@ -16,9 +16,13 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # 📥 Clona repository
+      # ✅ Checkout senza tar
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
 
       # 🦀 Cache Rust dependencies
       - name: Cache cargo & target
@@ -39,7 +43,6 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
           restore-keys: ${{ runner.os }}-node-
 
-      # 🧰 Node.js setup
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -48,7 +51,7 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Build frontend (per generare cache Vite)
+      - name: Build frontend
         run: npm run build
 
       # 🦀 Rust toolchain
