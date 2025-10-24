@@ -16,16 +16,15 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # ✅ Checkout senza tar
+      # ✅ Checkout pulito, senza TAR
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: false
           persist-credentials: false
 
-      # 🦀 Cache Rust dependencies
-      - name: Cache cargo & target
+      # 🦀 Cache Cargo
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
@@ -83,7 +82,7 @@ jobs:
           path: /usr/local/lib/android/sdk
           key: ${{ runner.os }}-android-sdk-v2
 
-      - name: Install Android SDK cmdline-tools if not cached
+      - name: Install Android cmdline-tools if missing
         run: |
           if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
             echo "📥 Installing Android cmdline-tools..."
