@@ -16,12 +16,14 @@ jobs:
       PATH: $PATH:$HOME/.cargo/bin
 
     steps:
-      # ✅ Checkout pulito, senza TAR
+      # ✅ Checkout minimale — niente TAR
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false
+
+      - name: Verify Git
+        run: git --version
 
       # 🦀 Cache Cargo
       - name: Cache Cargo
@@ -53,7 +55,7 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      # 🦀 Rust toolchain
+      # 🦀 Install Rust toolchain
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -104,5 +106,5 @@ jobs:
         run: |
           sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-      - name: ✅ Cache populated successfully
-        run: echo "✅ Tutte le cache sono state generate!"
+      - name: ✅ Cache popolata
+        run: echo "✅ Cache Android, Cargo e Node popolata con successo!"
