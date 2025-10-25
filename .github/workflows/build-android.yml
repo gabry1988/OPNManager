@@ -4,7 +4,163 @@ on:
   push:
     tags:
       - 'v*'
+  name: Build Android APK
+
+on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
+      TAURI_SKIP_DEVSERVER: true
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Check git availability
+        run: |
+          echo "PATH=$PATH"
+          command -v git
+          git --version
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-v3
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Restore node modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-node-
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Tauri CLI cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-tauri-cli-v3
+
+      - name: Add Cargo bin to PATH
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install Tauri CLI if missing
+        run: |
+          if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
+          if ! command -v cargo-tauri >/dev/null 2>&1; then
+            cargo install tauri-cli --locked
+          fi
+
+      - name: Restore Android SDK cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: ${{ runner.os }}-android-sdk-v2
+
+      - name: Add Android SDK tools to PATH
+        run: echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+      - name: Install Android cmdline-tools if missing
+        run: |
+          if [ ! -f "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+            cd "$ANDROID_SDK_ROOT/cmdline-tools"
+            curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
+            unzip -q cmdline-tools.zip
+            mv cmdline-tools latest
+            rm cmdline-tools.zip
+          fi
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
+
+      - name: Reinitialize Tauri Android project
+        run: |
+          rm -rf src-tauri/gen/android
+          cd src-tauri
+          cargo tauri android init
+
+      - name: Build Android APK (Debug)
+        run: |
+          if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
+          cargo tauri android build --debug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: opnmanager-debug-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
+
+      - name: Generate release keystore
+        run: |
+          keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android -dname "CN=OPNManager, OU=Dev, O=Dev, L=City, ST=State, C=US" \
+            -alias opnmanager
+
+      - name: Build Android APK (Release Signed)
+        run: |
+          if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
+          cargo tauri android build --release -- \
+            --signing-key release-key.jks \
+            --alias opnmanager \
+            --storepass android \
+            --keypass android
+
+      - name: Rename release APK
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          APK_DIR="src-tauri/gen/android/app/build/outputs/apk/release"
+          APK_FILE=$(ls "$APK_DIR"/*.apk | head -n 1)
+          NEW_NAME="OPNManager-${TAG_NAME}-release.apk"
+          mv "$APK_FILE" "$APK_DIR/$NEW_NAME"
+          echo "RENAMED_APK=$APK_DIR/$NEW_NAME" >> "$GITHUB_ENV"
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: opnmanager-release-apk
+          path: ${{ env.RENAMED_APK }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.RENAMED_APK }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```0:
 
 jobs:
   build:
