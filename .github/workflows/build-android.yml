@@ -37,7 +37,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: ${{ runner.os }}-cargo-v6
+          key: ${{ runner.os }}-cargo-v7
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Restore node modules cache
@@ -65,7 +65,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
-          key: ${{ runner.os }}-tauri-cli-v6
+          key: ${{ runner.os }}-tauri-cli-v7
 
       - name: Add Cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
@@ -76,6 +76,19 @@ jobs:
           if ! command -v cargo-tauri >/dev/null 2>&1; then
             cargo install tauri-cli --locked
           fi
+
+      # 🔧 FIX BLOCCO VERSIONI: forza il lockfile a usare le versioni compatibili
+      - name: Pin Tauri crate versions (fix lock)
+        run: |
+          set -e
+          cd src-tauri
+          # (opzionale) pulizia index locale in cache, non obbligatoria:
+          # rm -rf ~/.cargo/registry/index/*
+          cargo update -p tauri --precise 2.5.1
+          cargo update -p tauri-build --precise 2.5.1
+          cargo update -p tauri-utils --precise 2.5.0
+          echo "Lockfile aggiornato:"
+          grep -E 'name = "tauri(-utils|-build)?"|version = ' Cargo.lock | sed 'N;s/\n/ /'
 
       - name: Restore Android SDK cache
         uses: actions/cache@v4
