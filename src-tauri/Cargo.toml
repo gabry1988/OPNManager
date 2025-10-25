@@ -36,6 +36,6 @@ codegen-units = 1
 [profile.dev]
 opt-level = 0
 
-# forza la versione compatibile di tauri-utils per evitare il mismatch
+# >>> Fix: allinea tauri-utils a una versione compatibile con tauri 2.5.1
 [patch.crates-io]
-tauri-utils = "=2.5.1"
+tauri-utils = "=2.5.0"
