@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
-          key: ${{ runner.os }}-tauri-cli-v4
+          key: ${{ runner.os }}-tauri-cli-v5
 
       - name: Add Cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
