@@ -31,7 +31,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: ${{ runner.os }}-cargo-v4
+          key: ${{ runner.os }}-cargo-v6
           restore-keys: ${{ runner.os }}-cargo-
 
       # Cache Node (puoi lasciare hashFiles; se vuoi forzare, cambia a -v2)
@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
-          key: ${{ runner.os }}-tauri-cli-v5
+          key: ${{ runner.os }}-tauri-cli-v6
 
       - name: Add Cargo bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
